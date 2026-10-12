@@ -10,6 +10,7 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | NASA Mars Trek – Viking MDIM 2.1 Color Mosaic (trek.nasa.gov) | Marskarte | NASA/USGS, frei nutzbar |
 | NASA Planetary Fact Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet) | Physikalische Daten | NASA, gemeinfrei |
 | E. M. Standish, Keplerian Elements for Approximate Positions of the Major Planets (ssd.jpl.nasa.gov/planets/approx_pos.html) | Planetenbahnen | JPL/NASA |
+| NASA Solar System Exploration – Asteroidengürtel (~2,2–3,2 AE), Kuipergürtel (~30–50 AE), Jupiter-Trojaner (L4/L5) | Grobe Darstellung der Kleinkörper-Regionen (statistisch, keine Einzelobjekte) | NASA, gemeinfrei |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
 
 ## Software

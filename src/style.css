@@ -55,19 +55,55 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .body-label:hover { border-color: var(--accent); }
 
+/* Segment-Umschalter */
+.seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-strong); border: 1px solid var(--line); border-radius: 9px; }
+.seg button { background: none; border: 0; border-radius: 6px; padding: 5px 11px; color: var(--muted); white-space: nowrap; }
+.seg button:hover { color: var(--text); }
+.seg button.on { color: var(--text); background: rgba(110, 168, 255, 0.2); }
+.live-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #ff5a5a; vertical-align: 1px; }
+.is-live .live-dot { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+
 /* Zeitleiste */
 .timebar {
-  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 5;
-  display: flex; gap: 12px; align-items: center; padding: 8px 12px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-  backdrop-filter: blur(8px);
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 14px;
+  width: min(940px, calc(100vw - 32px));
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
-.timebar input, .timebar button {
+.tb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.tb-now { font-family: Orbitron, sans-serif; font-size: 13px; letter-spacing: 0.05em; font-variant-numeric: tabular-nums; min-width: 190px; }
+.tb-play { display: flex; gap: 3px; }
+.timebar button, .timebar select, .timebar input[type=date] {
   background: var(--surface-strong); border: 1px solid var(--line); border-radius: 8px;
-  padding: 6px 10px; color: var(--text); color-scheme: dark;
+  padding: 5px 9px; color: var(--text); color-scheme: dark; font: inherit;
 }
-.speeds { display: flex; gap: 4px; }
-.timebar button.on { border-color: var(--accent); background: rgba(110, 168, 255, 0.18); }
+.timebar .seg button { border: 0; background: none; }
+.timebar .seg button.on { background: rgba(110, 168, 255, 0.2); }
+.tb-play button.on, .tb-loop.on { border-color: var(--accent); background: rgba(110, 168, 255, 0.2); }
+.tb-speed { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+.tb-range label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.scrub { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.tb-hint { margin: 0; font-size: 11px; color: var(--muted); }
+.is-live .tb-play, .is-live .tb-speed, .is-live .tb-loop, .is-live .tb-range, .is-live .tb-hint { display: none; }
+
+/* Darstellungs-Steuerung (Sonnensystem) */
+.view-controls {
+  position: absolute; top: 14px; left: 14px; z-index: 5; display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+.vc-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vc-group label { display: flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
+.vc-group input { accent-color: var(--accent); }
+.vc-title { width: 58px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.vc-note { margin: 0; font-size: 11px; color: var(--accent); max-width: 260px; }
+
+/* Zonen-/Gürtelbeschriftungen */
+.zone-label, .belt-label { pointer-events: none; white-space: nowrap; letter-spacing: 0.12em; text-transform: uppercase; }
+.zone-label { font-family: Orbitron, sans-serif; font-size: 11px; color: rgba(160, 190, 255, 0.55); }
+.belt-label { font-size: 10px; color: rgba(220, 205, 170, 0.6); }
 
 /* Karten-Reiter */
 .body-tabs {
@@ -99,6 +135,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.facts small { color: var(--muted); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .actions a, .actions button {
   padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-strong);
@@ -118,5 +155,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .topbar { gap: 12px; padding: 0 12px; }
   .brand-name, .status { display: none; }
   .nav a { padding: 6px 8px; font-size: 13px; }
-  .timebar { flex-wrap: wrap; justify-content: center; width: calc(100vw - 32px); }
+  .timebar { bottom: 8px; padding: 8px; gap: 6px; }
+  .tb-now { min-width: 0; font-size: 12px; }
+  .tb-range label:last-child { display: none; }
+  .view-controls { top: 8px; left: 8px; right: 8px; padding: 8px; gap: 6px; }
+  .vc-title { width: auto; }
+  .vc-group:last-of-type label { font-size: 12px; }
+  .panel { top: auto; bottom: 8px; max-height: 55vh; overflow: auto; z-index: 25; }
 }

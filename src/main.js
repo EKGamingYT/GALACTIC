@@ -1,14 +1,20 @@
 import './style.css';
 import { bodyById, mappedBodies } from './data/bodies.js';
+import { heliocentricPosition } from './lib/orbits.js';
+import { createClock } from './lib/time.js';
 import { createSystemView } from './views/system.js';
 import { createGlobeView } from './views/globe.js';
 import { createSkyView } from './views/sky.js';
+import { createTimebar } from './ui/timebar.js';
 
 const $ = (sel) => document.querySelector(sel);
 const panel = $('#panel');
+const AU_KM = 149597870.7;
 
-const fmt = (n, unit = '') =>
-  n === null || n === undefined ? '–' : `${n.toLocaleString('de-DE')}${unit}`;
+const fmt = (n, unit = '', digits) =>
+  n === null || n === undefined
+    ? '–'
+    : `${n.toLocaleString('de-DE', digits !== undefined ? { maximumFractionDigits: digits } : {})}${unit}`;
 
 function bodyDetails(body) {
   return `
@@ -19,17 +25,41 @@ function bodyDetails(body) {
       <dt>Tageslänge</dt><dd>${fmt(body.dayHours, ' h')}</dd>
       <dt>Mittlere Temp.</dt><dd>${fmt(body.meanTempC, ' °C')}</dd>
       <dt>Monde</dt><dd>${fmt(body.moons)}</dd>
-      ${body.elements ? `<dt>Große Halbachse</dt><dd>${fmt(body.elements[0], ' AE')}</dd>` : ''}
+      ${body.elements ? `
+      <dt>Abstand zur Sonne</dt><dd data-live="sun">–</dd>
+      ${body.id !== 'earth' ? '<dt>Abstand zur Erde</dt><dd data-live="earth">–</dd>' : ''}` : ''}
     </dl>`;
+}
+
+// Live-Werte im Panel (ändern sich mit der eingestellten Zeit)
+let panelBody = null;
+function updatePanelLive() {
+  if (!panelBody?.elements || panel.classList.contains('hidden')) return;
+  const date = clock.date();
+  const p = heliocentricPosition(panelBody, date);
+  const e = heliocentricPosition(bodyById('earth'), date);
+  const rSun = Math.hypot(p.x, p.y, p.z);
+  const rEarth = Math.hypot(p.x - e.x, p.y - e.y, p.z - e.z);
+  const show = (au) => `${fmt(au, ' AE', 3)} <small>(${fmt(au * AU_KM / 1e6, ' Mio. km', 1)})</small>`;
+  const sun = panel.querySelector('[data-live=sun]');
+  const earth = panel.querySelector('[data-live=earth]');
+  if (sun) sun.innerHTML = show(rSun);
+  if (earth) earth.innerHTML = show(rEarth);
 }
 
 function showPanel(html) {
   panel.innerHTML = `<button class="close" aria-label="Schließen">×</button>${html}`;
   panel.classList.remove('hidden');
-  panel.querySelector('.close').onclick = () => panel.classList.add('hidden');
+  panel.querySelector('.close').onclick = () => {
+    panel.classList.add('hidden');
+    panelBody = null;
+    system.select(null);
+  };
 }
 
 function selectBody(body) {
+  panelBody = body;
+  system.select(body.id);
   const children = (body.children || []).map(bodyById);
   showPanel(`
     <p class="eyebrow">${body.type}</p>
@@ -42,9 +72,11 @@ function selectBody(body) {
     </div>
     <p class="muted small">Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)</p>`);
   panel.querySelector('[data-act="focus"]')?.addEventListener('click', () => system.focus(body.id));
+  updatePanelLive();
 }
 
 function pickPoint(body, lat, lon) {
+  panelBody = null;
   showPanel(`
     <p class="eyebrow">${body.name} · Punktabfrage</p>
     <h2 style="--accent:${body.color}">${lat.toFixed(3)}°, ${lon.toFixed(3)}°</h2>
@@ -57,47 +89,53 @@ function pickPoint(body, lat, lon) {
 }
 
 // --- Ansichten ---------------------------------------------------------------
+const clock = createClock();
 const system = createSystemView($('#view-system'), { onSelect: selectBody });
 const globe = createGlobeView($('#view-body'), { onPick: pickPoint });
 createSkyView($('#view-sky'));
 
-// Zeitsteuerung für das Sonnensystem
-const timebar = document.createElement('div');
-timebar.className = 'timebar';
-timebar.innerHTML = `
-  <input type="date" id="date" />
-  <div class="speeds">
-    <button data-speed="0" class="on">Pause</button>
-    <button data-speed="1">1 Tag/s</button>
-    <button data-speed="30">1 Monat/s</button>
-    <button data-speed="365">1 Jahr/s</button>
-  </div>
-  <button id="today">Heute</button>`;
-$('#view-system').appendChild(timebar);
-
-const dateInput = $('#date');
-const syncDateInput = () => (dateInput.value = system.getDate().toISOString().slice(0, 10));
-syncDateInput();
-dateInput.onchange = () => dateInput.value && system.setDate(new Date(dateInput.value + 'T12:00:00Z'));
-$('#today').onclick = () => { system.setDate(new Date()); syncDateInput(); };
-
-let daysPerSecond = 0;
-timebar.querySelectorAll('[data-speed]').forEach((btn) => {
-  btn.onclick = () => {
-    daysPerSecond = Number(btn.dataset.speed);
-    timebar.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('on', b === btn));
-  };
+createTimebar($('#view-system'), clock);
+clock.onChange(() => {
+  system.setDate(clock.date());
+  updatePanelLive();
 });
-let last = performance.now();
-(function tick(now) {
-  const dt = (now - last) / 1000;
-  last = now;
-  if (daysPerSecond) {
-    system.setDate(new Date(system.getDate().getTime() + daysPerSecond * dt * 86400000));
-    syncDateInput();
-  }
-  requestAnimationFrame(tick);
-})(last);
+
+// Darstellung: Bahnmodus, Bereich, Ebenen
+const controls = document.createElement('div');
+controls.className = 'view-controls';
+controls.innerHTML = `
+  <div class="vc-group">
+    <span class="vc-title">Bahnen</span>
+    <div class="seg">
+      <button data-orbit="flat" class="on" title="Alle Bahnen in einer Ebene, Abstände gestaucht">Lehrbuch</button>
+      <button data-orbit="real" title="Echte Bahnneigungen und maßstabsgetreue Abstände">Real</button>
+    </div>
+  </div>
+  <div class="vc-group">
+    <span class="vc-title">Bereich</span>
+    <div class="seg">
+      <button data-frame="52">Gesamt</button>
+      <button data-frame="3.5">Inneres</button>
+      <button data-frame="35">Äußeres</button>
+    </div>
+  </div>
+  <div class="vc-group">
+    <span class="vc-title">Ebenen</span>
+    <label><input type="checkbox" data-layer="orbits" checked /> Bahnen</label>
+    <label><input type="checkbox" data-layer="belts" checked /> Gürtel</label>
+    <label><input type="checkbox" data-layer="zones" checked /> Zonen</label>
+  </div>
+  <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;
+$('#view-system').appendChild(controls);
+
+controls.querySelectorAll('[data-orbit]').forEach((b) => (b.onclick = () => {
+  const real = b.dataset.orbit === 'real';
+  system.setRealMode(real);
+  controls.querySelectorAll('[data-orbit]').forEach((x) => x.classList.toggle('on', x === b));
+  controls.querySelector('.vc-note').hidden = !real;
+}));
+controls.querySelectorAll('[data-frame]').forEach((b) => (b.onclick = () => system.frame(Number(b.dataset.frame))));
+controls.querySelectorAll('[data-layer]').forEach((c) => (c.onchange = () => system.setLayer(c.dataset.layer, c.checked)));
 
 // Kartenauswahl (Erde / Mond / Mars …)
 const bodyTabs = document.createElement('div');
@@ -120,7 +158,7 @@ function route() {
     bodyTabs.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.body === body.id));
     $('#status').textContent = `Karte: ${body.name}`;
   } else {
-    $('#status').textContent = view === 'sky' ? 'SPHEREx · Vorschau' : 'Sonnensystem · Live-Bahnen';
+    $('#status').textContent = view === 'sky' ? 'SPHEREx · Vorschau' : 'Sonnensystem';
   }
 }
 window.addEventListener('hashchange', route);
