@@ -20,4 +20,6 @@ Dann http://localhost:5173 öffnen (unter Windows auch per `GALACTIC starten.bat
 - `src/data/bodies.js` – Himmelskörper, physikalische Daten, Kartenquellen
 - `docs/` – Recherche & Planung
 
+**Live-Demo:** https://galactic-vert.vercel.app
+
 Quellen und Lizenzen: [CREDITS.md](CREDITS.md). Lizenz: Apache-2.0.
