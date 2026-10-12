@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>G.A.L.A.C.T.I.C. – Atlas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#/system" title="Zum Sonnensystem">
+        <span class="brand-mark"></span>
+        <span class="brand-name">G.A.L.A.C.T.I.C.</span>
+      </a>
+      <nav class="nav">
+        <a href="#/system" data-view="system">Sonnensystem</a>
+        <a href="#/body/earth" data-view="body">Planetenkarten</a>
+        <a href="#/sky" data-view="sky">Himmel · SPHEREx</a>
+      </nav>
+      <div class="status" id="status"></div>
+    </header>
+
+    <main id="stage">
+      <section id="view-system" class="view"></section>
+      <section id="view-body" class="view"></section>
+      <section id="view-sky" class="view"></section>
+    </main>
+
+    <aside id="panel" class="panel hidden"></aside>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
