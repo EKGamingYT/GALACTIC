@@ -46,6 +46,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 #stage { position: fixed; inset: var(--topbar-h) 0 0 0; }
 .view { position: absolute; inset: 0; display: none; }
 .view.active { display: block; }
+/* Gesten gehören der 3D-Ansicht, nicht dem Browser (kein Seiten-Zoom beim Kneifen) */
+.view, .view canvas { touch-action: none; overscroll-behavior: none; }
 .view canvas { display: block; }
 .labels { position: absolute; inset: 0; pointer-events: none; }
 .body-label {

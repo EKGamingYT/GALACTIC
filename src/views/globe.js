@@ -51,6 +51,14 @@ export function createGlobeView(container, { onPick }) {
     viewer.scene.globe.showGroundAtmosphere = isEarth;
     viewer.camera.setView({ destination: Cartesian3.fromDegrees(0, 10, r * 3, ellipsoid) });
 
+    // Ruhigere Steuerung (v. a. Touch): weniger Nachlauf, Zoomgrenzen
+    const ctl = viewer.scene.screenSpaceCameraController;
+    ctl.inertiaSpin = 0.6;
+    ctl.inertiaTranslate = 0.6;
+    ctl.inertiaZoom = 0.5;
+    ctl.minimumZoomDistance = 300;
+    ctl.maximumZoomDistance = r * 8;
+
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((e) => {
       const cart = viewer.camera.pickEllipsoid(e.position, ellipsoid);
