@@ -60,6 +60,8 @@ export const ATMOSPHERES = {
   saturn:  { color: 0xe6d09a, strength: 0.35, scale: 1.07, power: 3.2 },
   uranus:  { color: 0x8fe0e8, strength: 0.7,  scale: 1.09, power: 3.0 },
   neptune: { color: 0x4a70ff, strength: 0.7,  scale: 1.09, power: 3.0 },
+  // Plutos dünne Stickstoff-Atmosphäre erscheint im Gegenlicht blau (Dunstschichten, New Horizons)
+  pluto:   { color: 0x6fa8ff, strength: 0.45, scale: 1.06, power: 3.4 },
 };
 
 function shell(radius, cfg, outer, flatten) {

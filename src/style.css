@@ -205,3 +205,41 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .minor-label { font-size: 9px; }
   .zone-label { font-size: 9px; }
 }
+
+/* --- Suche ------------------------------------------------------------------ */
+.search { position: relative; margin-left: 8px; }
+.search input {
+  width: 190px; padding: 7px 12px; font: inherit; color: var(--text); color-scheme: dark;
+  background: var(--surface-strong); border: 1px solid var(--line); border-radius: 999px; outline: none;
+  transition: width 0.2s, border-color 0.2s;
+}
+.search input:focus { width: 240px; border-color: var(--accent); }
+.search-results {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; min-width: 260px; margin: 0; padding: 6px;
+  list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  backdrop-filter: blur(12px); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.search-results li { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.search-results li:hover { background: rgba(110, 168, 255, 0.15); }
+.search-results li small { margin-left: auto; color: var(--muted); font-size: 11px; }
+.search-results li.none { color: var(--muted); cursor: default; }
+.search-results .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* --- Sternansicht & Koordinatenkreuz ----------------------------------------------- */
+.system-label {
+  pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  transform: translateY(-34px); padding: 6px 14px; text-align: center;
+  background: rgba(8, 12, 24, 0.6); border: 1px solid rgba(255, 204, 85, 0.45); border-radius: 12px;
+}
+.system-label strong { font-family: Orbitron, sans-serif; font-size: 14px; letter-spacing: 0.1em; color: #ffe2a0; }
+.system-label span { font-size: 11px; color: var(--muted); }
+.system-label:hover { border-color: #ffcc55; }
+.ref-label { pointer-events: none; font-size: 10px; letter-spacing: 0.06em; color: rgba(210, 222, 245, 0.75); white-space: nowrap; }
+.hz-label { color: rgba(61, 220, 132, 0.75) !important; }
+.facts-wide { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); }
+.facts-wide dd { text-align: right; }
+
+@media (max-width: 720px) {
+  .search input { width: 120px; }
+  .search input:focus { width: 160px; }
+}

@@ -13,7 +13,7 @@ export const TEXTURES = {
   saturn: { map: '2k_saturn.jpg', ring: '2k_saturn_ring_alpha.png' },
   uranus: { map: '2k_uranus.jpg' },
   neptune: { map: '2k_neptune.jpg' },
-  pluto: { map: 'pluto_newhorizons.jpg' },
+  pluto: { map: 'pluto_newhorizons.jpg', tint: '#e2c09a' }, // Graustufen-Mosaik → echtes Beige/Rotbraun
   ceres: { map: 'ceres_dawn.jpg' },
   vesta: { map: 'vesta_dawn.jpg' },
   eris: { map: '2k_eris_fictional.jpg', artistic: true },

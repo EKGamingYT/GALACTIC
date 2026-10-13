@@ -18,6 +18,7 @@ import { createSun } from '../lib/sun.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
 import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
+import { HABITABLE_ZONE, REFERENCE_DIRECTIONS, GALACTIC_NORTH, SOLAR_SYSTEM } from '../data/solarsystem.js';
 import { OBLATENESS, axisScale, lumpiness } from '../data/shapes.js';
 import { shapeGeometry, flattenGeometry } from '../lib/shape.js';
 import { enableGasFlow, gasTime, GAS_FLOW } from '../lib/gasflow.js';
@@ -97,7 +98,7 @@ export function createSystemView(container, { onSelect }) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.minDistance = 6;
-  controls.maxDistance = 80000;
+  controls.maxDistance = 250000;
 
   scene.add(createStarfield());
   scene.add(new THREE.AmbientLight(0xffffff, 0.1)); // schwach: Nachtseiten dunkel, aber nicht schwarz
@@ -128,6 +129,7 @@ export function createSystemView(container, { onSelect }) {
     const flat = OBLATENESS[body.id] || 0; // echte Abplattung der Planeten
     const isGas = !!GAS_FLOW[body.id];
     const lit = []; // Materialien, deren Farbe mit der Sonneneinstrahlung skaliert wird
+    const pushLit = (m) => { m.userData.base = m.color.clone(); lit.push(m); };
     let mesh;
     if (isSun) mesh = sun.mesh;
     else {
@@ -140,17 +142,18 @@ export function createSystemView(container, { onSelect }) {
         map, roughness: 0.95,
         emissive: new THREE.Color(body.color).multiplyScalar(0.05), // Nachtseite nie ganz schwarz
       });
+      if (tex?.tint) mat.color.set(tex.tint); // Graustufen-Aufnahmen in echter Farbe einfärben
       if (isGas) enableGasFlow(mat, body.id); // fließende Wolkenbänder
       else if (body.id !== 'earth') { mat.bumpMap = map; mat.bumpScale = BUMP_SCALE[body.id] ?? BUMP_DEFAULT; } // Kraterrelief
-      lit.push(mat);
+      pushLit(mat);
       mesh = new THREE.Mesh(geo, mat);
     }
     mesh.userData.body = body;
     (layer ? layers[layer] : scene).add(mesh);
-    if (tex?.clouds) { const c = createClouds(radius, tex.clouds, flat); mesh.add(c); lit.push(c.material); }
+    if (tex?.clouds) { const c = createClouds(radius, tex.clouds, flat); mesh.add(c); pushLit(c.material); }
     const atmo = isSun ? null : createAtmosphere(body.id, radius, flat);
     if (atmo) mesh.add(atmo);
-    if (body.ring) { const ring = createRing(radius, tex?.ring); mesh.add(ring); lit.push(ring.material); }
+    if (body.ring) { const ring = createRing(radius, tex?.ring); mesh.add(ring); pushLit(ring.material); }
     const labelCls = !layer || layer === 'dwarfs' ? 'body-label' : 'minor-label';
     const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body), body.color);
     mesh.add(label);
@@ -215,7 +218,11 @@ export function createSystemView(container, { onSelect }) {
   let selectedId = null;
 
   let lastLightMs = null;
+  let geomDate = null, geomBlend = null; // Stand der zuletzt berechneten Bahnen/Gürtel
   function update() {
+    // Bahnlinien und 13.000 Gürtelteilchen ändern sich in Sekunden kaum → nur neu rechnen, wenn sich
+    // die Zeit um > 6 h verschoben hat oder die Darstellung überblendet (gegen Ruckler im Live-Modus)
+    const geom = geomBlend !== blend || geomDate === null || Math.abs(date - geomDate) > 6 * 3600e3;
     for (const { body, mesh, orbit, tail, lit, atmo } of bodies.values()) {
       if (!orbit) continue;
       const helio = heliocentricPosition(body, date);
@@ -225,23 +232,29 @@ export function createSystemView(container, { onSelect }) {
       // Sonneneinstrahlung nur bei Datumswechsel nachführen (nicht bei jedem Überblendungs-Bild)
       if (lit && lastLightMs !== date.getTime()) {
         const f = irradianceFactor(rAu);
-        for (const m of lit) m.color.setScalar(f);
+        for (const m of lit) m.color.copy(m.userData.base).multiplyScalar(f);
         atmo?.userData.setIrradiance(f);
       }
-      const arr = orbit.geometry.attributes.position.array;
-      orbitPath(body, date, ORBIT_STEPS).forEach((p, i) => {
-        const v = mapPoint(p, blend);
-        arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z;
-      });
-      orbit.geometry.attributes.position.needsUpdate = true;
-      orbit.geometry.computeBoundingSphere();
-      orbit.material.opacity = body.id === selectedId ? 0.9 : orbit.userData.baseOpacity;
+      if (geom) {
+        const arr = orbit.geometry.attributes.position.array;
+        orbitPath(body, date, ORBIT_STEPS).forEach((p, i) => {
+          const v = mapPoint(p, blend);
+          arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z;
+        });
+        orbit.geometry.attributes.position.needsUpdate = true;
+        orbit.geometry.computeBoundingSphere();
+      }
     }
+    applyOrbitStyle();
 
     lastLightMs = date.getTime();
     const jup = heliocentricPosition(bodies.get('jupiter').body, date);
     const jupLon = Math.atan2(jup.y, jup.x) / (Math.PI / 180);
+    if (!geom) return;
+    geomDate = date.getTime();
+    geomBlend = blend;
     belts.update(date, blend, jupLon);
+    updateHabitableZone();
 
     for (const z of zoneLabels) z.obj.position.copy(polar(z.au, z.angle));
     trojanLabel.position.copy(polar(5.2, jupLon + 60));
@@ -252,6 +265,120 @@ export function createSystemView(container, { onSelect }) {
     }
     boundary.geometry.attributes.position.needsUpdate = true;
     boundary.computeLineDistances();
+  }
+
+  // --- Bahnen: alle oder nur die des ausgewählten Körpers -----------------------------
+  let orbitsOn = true;
+  let orbitMode = 'all'; // 'all' | 'selected'
+  function applyOrbitStyle() {
+    for (const { body, orbit } of bodies.values()) {
+      if (!orbit) continue;
+      const sel = body.id === selectedId;
+      orbit.visible = orbitsOn && (orbitMode === 'all' || sel);
+      orbit.material.opacity = sel ? 0.9 : orbit.userData.baseOpacity;
+    }
+  }
+
+  // --- Habitable Zone (Kopparapu et al.): konservatives Band + optimistische Ränder ------
+  const HZ_SEG = 256;
+  const hzGroup = new THREE.Group();
+  scene.add(hzGroup);
+  const hzBand = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+    color: 0x3ddc84, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false,
+  }));
+  {
+    const idx = [];
+    for (let i = 0; i < HZ_SEG; i++) {
+      const a = i * 2, b = ((i + 1) % HZ_SEG) * 2;
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+    hzBand.geometry.setIndex(idx);
+    hzBand.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(HZ_SEG * 2 * 3), 3));
+  }
+  const hzEdges = HABITABLE_ZONE.optimistic.map(() => new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(new Array(HZ_SEG).fill(0).map(() => new THREE.Vector3())),
+    new THREE.LineDashedMaterial({ color: 0x3ddc84, dashSize: 0.6, gapSize: 0.6, transparent: true, opacity: 0.45 })));
+  hzGroup.add(hzBand, ...hzEdges);
+  const hzLabel = makeLabel('Habitable Zone', 'zone-label hz-label');
+  hzGroup.add(hzLabel);
+  declutterItems.push({ el: hzLabel.element, id: null, prio: 40 });
+  layers.hz = hzGroup;
+
+  function updateHabitableZone() {
+    const [inner, outer] = HABITABLE_ZONE.conservative;
+    const pos = hzBand.geometry.attributes.position.array;
+    for (let i = 0; i < HZ_SEG; i++) {
+      const deg = (i / HZ_SEG) * 360;
+      polar(inner, deg).toArray(pos, i * 6);
+      polar(outer, deg).toArray(pos, i * 6 + 3);
+    }
+    hzBand.geometry.attributes.position.needsUpdate = true;
+    hzBand.geometry.computeBoundingSphere();
+    HABITABLE_ZONE.optimistic.forEach((au, k) => {
+      const arr = hzEdges[k].geometry.attributes.position.array;
+      for (let i = 0; i < HZ_SEG; i++) polar(au, (i / HZ_SEG) * 360).toArray(arr, i * 3);
+      hzEdges[k].geometry.attributes.position.needsUpdate = true;
+      hzEdges[k].computeLineDistances();
+    });
+    hzLabel.position.copy(polar((inner + outer) / 2, 215));
+  }
+
+  // --- Sternansicht: weit herausgezoomt bleibt nur die Sonne als Stern ------------------
+  // samt Koordinatenkreuz (ICRS über Quasare, Richtung galaktisches Zentrum/Nordpol).
+  const STAR_VIEW_AU = 1500;
+  const starGroup = new THREE.Group();
+  starGroup.visible = false;
+  scene.add(starGroup);
+  const starGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), color: 0xfff1c9, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, sizeAttenuation: false,
+  }));
+  starGlow.scale.setScalar(0.05);
+  starGroup.add(starGlow);
+  const systemLabel = makeLabel('Sonnensystem', 'system-label', 0, () => onSelect(SOLAR_SYSTEM));
+  systemLabel.element.innerHTML = '<strong>Sonnensystem</strong><span>Stern: Sonne · G2V · 8 Planeten</span>';
+  starGroup.add(systemLabel);
+  const refArrows = new THREE.Group();
+  starGroup.add(refArrows);
+  for (const ref of REFERENCE_DIRECTIONS) {
+    const d = new THREE.Vector3(ref.dir.x, ref.dir.z, -ref.dir.y).normalize(); // Ekliptik → Szene
+    const arrow = new THREE.ArrowHelper(d, new THREE.Vector3(), 1, ref.color, 0.06, 0.025);
+    arrow.line.material.transparent = true;
+    arrow.line.material.opacity = 0.7;
+    const lbl = makeLabel(ref.name, 'ref-label');
+    lbl.position.set(0, 1.08, 0); // Pfeilspitze (lokale y-Achse des ArrowHelper)
+    arrow.add(lbl);
+    refArrows.add(arrow);
+  }
+  // Galaktische Ebene als feiner Kreis senkrecht zum galaktischen Nordpol
+  {
+    const n = new THREE.Vector3(GALACTIC_NORTH.x, GALACTIC_NORTH.z, -GALACTIC_NORTH.y).normalize();
+    const u = new THREE.Vector3().crossVectors(n, new THREE.Vector3(0, 1, 0)).normalize();
+    const v = new THREE.Vector3().crossVectors(n, u);
+    const pts = [];
+    for (let i = 0; i <= 128; i++) {
+      const a = (i / 128) * Math.PI * 2;
+      pts.push(u.clone().multiplyScalar(Math.cos(a)).add(v.clone().multiplyScalar(Math.sin(a))).multiplyScalar(0.8));
+    }
+    refArrows.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color: 0xffb86b, transparent: true, opacity: 0.25 })));
+  }
+  const layerOn = {};
+  let starView = false;
+  function updateStarView() {
+    const dist = camera.position.length();
+    const want = dist > sceneDistance(STAR_VIEW_AU, blend);
+    if (want !== starView) {
+      starView = want;
+      starGroup.visible = want;
+      for (const [name, g] of Object.entries(layers)) g.visible = want ? false : layerOn[name] !== false;
+      for (const b of bodies.values()) if (b.body.id !== 'sun') b.mesh.visible = !want;
+      // Beschriftung „Sonne“ weicht in der Sternansicht dem Systemnamen
+      const sunLabel = bodies.get('sun').mesh.children.find((c) => c.isCSS2DObject);
+      if (sunLabel) sunLabel.visible = !want;
+      container.classList.toggle('star-view', want);
+    }
+    if (want) refArrows.scale.setScalar(dist * 0.32); // Kreuz wächst mit, bleibt im Bild
   }
 
   const polar = (au, deg) =>
@@ -377,6 +504,7 @@ export function createSystemView(container, { onSelect }) {
     for (const { mesh, minorLabel, body } of bodies.values()) {
       if (minorLabel) minorLabel.visible = body.id === selectedId || camera.position.distanceTo(mesh.position) < 45;
     }
+    updateStarView();
     controls.update();
     composer.render();
     labels.render(scene, camera);
@@ -401,14 +529,30 @@ export function createSystemView(container, { onSelect }) {
       frame(52); // Überblick bis zum Kuipergürtel
     },
     setLayer(name, visible) {
-      layers[name].visible = visible;
-      if (name === 'orbits') smallOrbits.forEach((o) => (o.visible = visible));
+      layerOn[name] = visible;
+      if (name === 'orbits') { orbitsOn = visible; applyOrbitStyle(); return; }
+      if (!starView) layers[name].visible = visible;
     },
-    select(id) { selectedId = id; update(); },
+    setOrbitMode(mode) { orbitMode = mode; applyOrbitStyle(); },
+    select(id) { selectedId = id; applyOrbitStyle(); },
     focus,
     frame,
     setActive(v) { active = v; if (v) resize(); },
   };
+}
+
+// Weicher runder Lichtpunkt (für die Sonne in der Sternansicht)
+function glowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.2, 'rgba(255,236,190,0.9)');
+  grad.addColorStop(1, 'rgba(255,200,120,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
 }
 
 function makeLabel(text, className, y = 0, onClick, dotColor) {

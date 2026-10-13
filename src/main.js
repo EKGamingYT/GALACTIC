@@ -1,5 +1,7 @@
 import './style.css';
-import { bodyById, mappedBodies } from './data/bodies.js';
+import { BODIES, bodyById, mappedBodies } from './data/bodies.js';
+import { SOLAR_SYSTEM, HABITABLE_ZONE } from './data/solarsystem.js';
+import { SMALL_BODIES } from './views/system.js';
 import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
@@ -68,7 +70,34 @@ function showPanel(html) {
   };
 }
 
+// Panel für das ganze Sonnensystem (in der Sternansicht anklickbar)
+function showSystemPanel() {
+  panelBody = null;
+  system.select(null);
+  const date = clock.date();
+  const [hzIn, hzOut] = HABITABLE_ZONE.conservative;
+  const inHz = BODIES.filter((b) => b.elements).map((b) => {
+    const p = heliocentricPosition(b, date);
+    return { b, r: Math.hypot(p.x, p.y, p.z) };
+  }).filter(({ r }) => r >= hzIn && r <= hzOut);
+  const row = ([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`;
+  showPanel(`
+    <p class="eyebrow">${SOLAR_SYSTEM.type}</p>
+    <h2 style="--accent:${SOLAR_SYSTEM.color}">${SOLAR_SYSTEM.name}</h2>
+    <dl class="facts facts-wide">${SOLAR_SYSTEM.facts.map(row).join('')}
+      <dt>In der habitablen Zone</dt><dd>${inHz.length
+        ? inHz.map(({ b, r }) => `${b.name} <small>(${fmt(r, ' AE', 2)})</small>`).join(', ')
+        : 'derzeit kein Planet'}</dd>
+    </dl>
+    <p class="eyebrow">Lage im Universum</p>
+    <dl class="facts facts-wide">${SOLAR_SYSTEM.galaxy.map(row).join('')}</dl>
+    <p class="muted small">Habitable Zone nach Kopparapu et al. (2013/14): Bereich, in dem flüssiges Wasser
+    auf der Oberfläche eines erdähnlichen Planeten möglich ist (grünes Band in der Systemansicht).
+    Quellen: NASA Sun Fact Sheet, IAU 2015, GRAVITY Collaboration 2019, IERS (ICRF3).</p>`);
+}
+
 function selectBody(body) {
+  if (body.id === SOLAR_SYSTEM.id) return showSystemPanel();
   panelBody = body;
   system.select(body.id);
   const children = (body.children || []).map(bodyById);
@@ -79,7 +108,7 @@ function selectBody(body) {
     ${TEXTURES[body.id]?.artistic ? '<p class="muted small">Oberfläche: künstlerische Darstellung – es gibt noch keine Nahaufnahmen.</p>' : ''}
     ${bodyDetails(body)}
     <div class="actions">
-      ${body.elements || body.kepler ? `<button data-act="focus">Heranfliegen</button>` : ''}
+      ${body.elements || body.kepler || body.id === 'sun' ? `<button data-act="focus">Heranfliegen</button>` : ''}
       ${body.maps ? `<a class="primary" href="#/body/${body.id}">Karte öffnen</a>` : ''}
       ${children.filter((c) => c.maps).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
     </div>
@@ -155,7 +184,7 @@ const controls = document.createElement('div');
 controls.className = 'view-controls';
 controls.innerHTML = `
   <div class="vc-group">
-    <span class="vc-title">Bahnen</span>
+    <span class="vc-title">Modell</span>
     <div class="seg">
       <button data-orbit="flat" class="on" title="Alle Bahnen in einer Ebene, Abstände gestaucht">Lehrbuch</button>
       <button data-orbit="real" title="Echte Bahnneigungen und maßstabsgetreue Abstände">Real</button>
@@ -168,11 +197,20 @@ controls.innerHTML = `
       <button data-frame="3.5">Inneres</button>
       <button data-frame="35">Äußeres</button>
       <button data-frame="900" title="Bis zur Bahn von Sedna">Fern</button>
+      <button data-frame="6000" title="Ganz hinaus: das Sonnensystem als Stern">Stern</button>
+    </div>
+  </div>
+  <div class="vc-group">
+    <span class="vc-title">Bahnen</span>
+    <div class="seg">
+      <button data-orbits="all" class="on">Alle</button>
+      <button data-orbits="selected" title="Nur die Bahn des angeklickten Körpers">Auswahl</button>
+      <button data-orbits="off">Aus</button>
     </div>
   </div>
   <div class="vc-group">
     <span class="vc-title">Ebenen</span>
-    <label><input type="checkbox" data-layer="orbits" checked /> Bahnen</label>
+    <label><input type="checkbox" data-layer="hz" checked /> Habitable Zone</label>
     <label><input type="checkbox" data-layer="belts" checked /> Gürtel</label>
     <label><input type="checkbox" data-layer="zones" checked /> Zonen</label>
     <label><input type="checkbox" data-layer="dwarfs" checked /> Zwergplaneten</label>
@@ -188,8 +226,49 @@ controls.querySelectorAll('[data-orbit]').forEach((b) => (b.onclick = () => {
   controls.querySelectorAll('[data-orbit]').forEach((x) => x.classList.toggle('on', x === b));
   controls.querySelector('.vc-note').hidden = !real;
 }));
+controls.querySelectorAll('[data-orbits]').forEach((b) => (b.onclick = () => {
+  const mode = b.dataset.orbits;
+  system.setLayer('orbits', mode !== 'off');
+  if (mode !== 'off') system.setOrbitMode(mode);
+  controls.querySelectorAll('[data-orbits]').forEach((x) => x.classList.toggle('on', x === b));
+}));
 controls.querySelectorAll('[data-frame]').forEach((b) => (b.onclick = () => system.frame(Number(b.dataset.frame))));
 controls.querySelectorAll('[data-layer]').forEach((c) => (c.onchange = () => system.setLayer(c.dataset.layer, c.checked)));
+
+// --- Suche über alle Objekte --------------------------------------------------------------
+const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES];
+const search = document.createElement('div');
+search.className = 'search';
+search.innerHTML = `<input type="search" placeholder="Objekt suchen …" aria-label="Objekt suchen" />
+  <ul class="search-results" role="listbox" hidden></ul>`;
+$('.topbar .nav').after(search);
+const sInput = search.querySelector('input');
+const sList = search.querySelector('ul');
+const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function goTo(body) {
+  sList.hidden = true;
+  sInput.value = '';
+  sInput.blur();
+  if (body.parent && body.maps) { location.hash = `#/body/${body.id}`; return; }
+  if (location.hash !== '#/system') location.hash = '#/system';
+  selectBody(body);
+  if (body.id === SOLAR_SYSTEM.id) system.frame(6000);
+  else system.focus(body.id);
+}
+sInput.addEventListener('input', () => {
+  const q = norm(sInput.value.trim());
+  if (!q) { sList.hidden = true; return; }
+  const hits = searchItems().filter((b) => norm(b.name).includes(q) || norm(b.fullname || '').includes(q)).slice(0, 8);
+  sList.innerHTML = hits.map((b, i) => `<li role="option" data-i="${i}"><span class="dot" style="background:${b.color}"></span>${b.name}<small>${b.type}</small></li>`).join('')
+    || '<li class="none">Nichts gefunden</li>';
+  sList.hidden = false;
+  sList.querySelectorAll('[data-i]').forEach((li) => (li.onmousedown = (e) => { e.preventDefault(); goTo(hits[li.dataset.i]); }));
+});
+sInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sList.querySelector('[data-i]')?.dispatchEvent(new MouseEvent('mousedown'));
+  if (e.key === 'Escape') { sList.hidden = true; sInput.blur(); }
+});
+sInput.addEventListener('blur', () => setTimeout(() => (sList.hidden = true), 150));
 
 // Kartenauswahl (Erde / Mond / Mars …)
 const bodyTabs = document.createElement('div');
