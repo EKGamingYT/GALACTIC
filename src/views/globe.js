@@ -6,6 +6,8 @@ import {
   Credit, Color, Cartesian3, Ion, Rectangle, WebMercatorTilingScheme,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
+import { createTerrariumTerrain } from '../lib/terrarium.js';
+import { enableOsmBuildings } from '../lib/osmBuildings.js';
 
 Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kacheln
 
@@ -28,7 +30,7 @@ function makeProvider(layer, ellipsoid) {
   });
 }
 
-export function createGlobeView(container, { onPick, onLayers }) {
+export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let viewer = null;
   let current = null;
   let ellipsoid = null;
@@ -56,6 +58,8 @@ export function createGlobeView(container, { onPick, onLayers }) {
 
     viewer = new Viewer(container, {
       globe: new Globe(ellipsoid),
+      // Erde: offenes 3D-Gelände (AWS Terrain Tiles); andere Körper vorerst glatt
+      ...(isEarth && { terrainProvider: createTerrariumTerrain(ellipsoid) }),
       baseLayer: new ImageryLayer(makeProvider(body.maps[0], ellipsoid)),
       baseLayerPicker: false, geocoder: false, homeButton: true, sceneModePicker: true,
       navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
@@ -64,6 +68,7 @@ export function createGlobeView(container, { onPick, onLayers }) {
       // nur in der Entwicklung: erlaubt Screenshots des WebGL-Canvas
       contextOptions: { webgl: { preserveDrawingBuffer: import.meta.env.DEV } },
     });
+    if (import.meta.env.DEV) window.__viewer = viewer; // nur lokales Testen
     viewer.scene.globe.baseColor = Color.BLACK;
     viewer.scene.globe.showGroundAtmosphere = isEarth;
     viewer.camera.setView({ destination: Cartesian3.fromDegrees(0, 10, r * 3, ellipsoid) });
@@ -73,7 +78,7 @@ export function createGlobeView(container, { onPick, onLayers }) {
     ctl.inertiaSpin = 0.6;
     ctl.inertiaTranslate = 0.6;
     ctl.inertiaZoom = 0.5;
-    ctl.minimumZoomDistance = 300;
+    ctl.minimumZoomDistance = isEarth ? 40 : 300;
     ctl.maximumZoomDistance = r * 8;
 
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -83,6 +88,11 @@ export function createGlobeView(container, { onPick, onLayers }) {
       const c = Cartographic.fromCartesian(cart, ellipsoid);
       onPick(body, CesiumMath.toDegrees(c.latitude), CesiumMath.toDegrees(c.longitude));
     }, ScreenSpaceEventType.LEFT_CLICK);
+    if (isEarth) {
+      viewer.scene.globe.depthTestAgainstTerrain = true;
+      enableOsmBuildings(viewer, onStatus);
+    }
+    onStatus?.(isEarth ? 'Tipp: nah heranzoomen (unter ~2,5 km Höhe) für 3D-Gelände und Gebäude' : '');
     onLayers?.(body, 0);
   }
 

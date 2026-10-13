@@ -19,6 +19,8 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | Solar System Scope – Planeten-, Sonnen-, Mond-, Ring-, Wolkentexturen (2k); Eris/Haumea/Makemake als künstlerische Darstellung | 3D-Oberflächen | CC BY 4.0, © Solar System Scope (basiert auf NASA-Daten) |
 | NASA Dawn (JPL-Caltech/UCLA/MPS/DLR/IDA) via USGS Astrogeology – Ceres- & Vesta-Globalmosaik | Oberflächen Ceres, Vesta | gemeinfrei |
 | NASA New Horizons (NASA/JHUAPL/SwRI) via USGS Astrogeology – Pluto-Globalmosaik | Oberfläche Pluto | gemeinfrei |
+| AWS Terrain Tiles / Mapzen Terrarium (s3.amazonaws.com/elevation-tiles-prod) – Quellen u. a. SRTM, GMTED2010, ETOPO1, NED | 3D-Gelände der Erde | offener AWS-Datensatz, Namensnennung der Quelldaten |
+| OpenStreetMap über Overpass API (overpass-api.de) | 3D-Gebäude (Grundrisse + Höhen-Tags) | © OpenStreetMap-Mitwirkende, ODbL |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
 
 ## Software

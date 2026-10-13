@@ -103,8 +103,11 @@ const clock = createClock();
 const system = createSystemView($('#view-system'), { onSelect: selectBody });
 const layerBar = document.createElement('div');
 layerBar.className = 'layer-bar';
+const mapStatus = document.createElement('div');
+mapStatus.className = 'map-status';
 const globe = createGlobeView($('#view-body'), {
   onPick: pickPoint,
+  onStatus: (text) => { mapStatus.textContent = text; mapStatus.hidden = !text; },
   // Ebenen-Umschalter der aktuellen Karte (z. B. Farbe / Relief / Infrarot)
   onLayers: (body, active) => {
     layerBar.innerHTML = `<div class="seg">${body.maps
@@ -168,6 +171,7 @@ bodyTabs.innerHTML = mappedBodies()
   .map((b) => `<a href="#/body/${b.id}" data-body="${b.id}">${b.name}</a>`).join('');
 $('#view-body').before(bodyTabs);
 bodyTabs.after(layerBar);
+$('#view-body').after(mapStatus);
 
 // --- Routing (#/system, #/body/<id>, #/sky) ---------------------------------------
 function route() {
@@ -176,6 +180,7 @@ function route() {
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
   bodyTabs.classList.toggle('active', view === 'body');
   layerBar.classList.toggle('active', view === 'body');
+  if (view !== 'body') mapStatus.hidden = true;
   system.setActive(view === 'system');
 
   if (view === 'body') {
