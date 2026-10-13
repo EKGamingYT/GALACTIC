@@ -8,6 +8,8 @@ import * as THREE from 'three';
 import MOONS from '../data/moons.json';
 import { julianDate } from '../lib/orbits.js';
 import { OBLIQUITY_DEG } from '../data/solarsystem.js';
+import { PLANET_MAPS } from '../data/planetmaps.js';
+import { trekTexture } from '../lib/trekTexture.js';
 
 const DEG = Math.PI / 180;
 const STEPS = 128;
@@ -82,7 +84,9 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
         color: m.id === 'moon' ? 0xffffff : moonColor(m), roughness: 0.95,
         map: m.id === 'moon' ? loadTex('2k_moon.jpg') : null,
       });
-      item.mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16), mat);
+      item.mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), mat);
+      // Echte Oberfläche aus den NASA-Trek-Karten (wird beim ersten Einblenden geladen)
+      if (PLANET_MAPS[m.id]) item.trek = PLANET_MAPS[m.id][0];
       item.mesh.userData.body = toBody(m);
       sys.group.add(item.mesh);
       const lbl = makeLabel(m.name, 'minor-label moon-label', r + 0.25, item.mesh.userData.body);
@@ -141,6 +145,16 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
       sys.group.position.copy(planetMesh(parent).position);
       const near = camera.position.distanceTo(sys.group.position) < sys.extent * 4.5;
       sys.group.visible = near || forceId === parent || byId.get(forceId)?.m.parent === parent;
+      if (sys.group.visible && !sys.textured) {
+        sys.textured = true;
+        for (const it of sys.items) {
+          if (!it.trek) continue;
+          const mat = it.mesh.material;
+          trekTexture(it.trek.url, it.trek.maxLevel, (tex) => {
+            mat.map = tex; mat.bumpMap = tex; mat.bumpScale = 0.4; mat.color.set(0xffffff); mat.needsUpdate = true;
+          });
+        }
+      }
     }
   }
 

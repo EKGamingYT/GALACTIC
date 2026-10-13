@@ -217,7 +217,8 @@ controls.innerHTML = `
       <button data-frame="3.5">Inneres</button>
       <button data-frame="35">Äußeres</button>
       <button data-frame="900" title="Bis zur Bahn von Sedna">Fern</button>
-      <button data-frame="6000" title="Ganz hinaus: das Sonnensystem als Stern">Stern</button>
+      <button data-frame="60000" title="Oortsche Wolke (bis 100.000 AE)">Oort</button>
+      <button data-frame="1500000" title="Ganz hinaus: Sonnensystem als Stern und Nachbarsterne">Sterne</button>
     </div>
   </div>
   <div class="vc-group">
@@ -236,6 +237,8 @@ controls.innerHTML = `
     <label><input type="checkbox" data-layer="dwarfs" checked /> Zwergplaneten</label>
     <label><input type="checkbox" data-layer="asteroids" checked /> Asteroiden</label>
     <label><input type="checkbox" data-layer="comets" checked /> Kometen</label>
+    <label><input type="checkbox" data-layer="oort" checked /> Oortsche Wolke</label>
+    <label><input type="checkbox" data-layer="planet9" checked /> Planet Neun?</label>
   </div>
   <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;
 $('#view-system').appendChild(controls);
@@ -273,7 +276,7 @@ function goTo(body) {
   if (body.parent && body.maps) { location.hash = `#/body/${body.id}`; return; }
   if (location.hash !== '#/system') location.hash = '#/system';
   selectBody(body);
-  if (body.id === SOLAR_SYSTEM.id) system.frame(6000);
+  if (body.id === SOLAR_SYSTEM.id) system.frame(1500000);
   else if (body.isMoon && !body.major) system.focus(body.parent); // kleine Monde: zum Planeten fliegen
   else system.focus(body.id);
 }
@@ -305,6 +308,23 @@ $('#view-body').before(bodyTabs);
 bodyTabs.after(layerBar);
 $('#view-body').after(mapStatus);
 
+// Ziehen startet nie einen Browser-Drag (Links/Bilder würden sonst in neue Tabs gezogen)
+document.addEventListener('dragstart', (e) => e.preventDefault());
+
+// Positionsanzeige oben rechts: Kamera relativ zur Sonne (heliozentrisch-ekliptikal, J2000)
+const statusEl = $('#status');
+statusEl.title = 'Kameraposition: Abstand zur Sonne, ekliptikale Länge λ und Breite β (J2000)';
+setInterval(() => {
+  if (!location.hash.startsWith('#/system') && location.hash) return;
+  const { au, lambda, beta, real } = system.cameraInfo();
+  const ly = au / 63241.077;
+  const dist = ly >= 0.05
+    ? `${fmt(ly, ' Lj', 2)} <small>(${fmt(au, ' AE', 0)})</small>`
+    : `${fmt(au, ' AE', au < 10 ? 2 : 0)}`;
+  statusEl.innerHTML = `<span class="hud-k">☉</span> ${dist} <span class="hud-k">λ</span> ${lambda.toFixed(1)}° `
+    + (real ? `<span class="hud-k">β</span> ${beta.toFixed(1)}°` : '<small>Lehrbuch</small>');
+}, 250);
+
 // --- Routing (#/system, #/body/<id>, #/sky) ---------------------------------------
 function route() {
   const [, view = 'system', arg] = location.hash.split('/');
@@ -321,7 +341,7 @@ function route() {
     mapSelect.value = body.id;
     $('#status').textContent = `Karte: ${body.name}`;
   } else {
-    $('#status').textContent = view === 'sky' ? 'SPHEREx · Vorschau' : 'Sonnensystem';
+    if (view === 'sky') $('#status').textContent = 'SPHEREx · Vorschau';
   }
 }
 window.addEventListener('hashchange', route);

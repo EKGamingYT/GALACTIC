@@ -46,11 +46,27 @@ const linear = (au) => AU_REAL * au;
 const scaleRadius = (km) => Math.max(0.35, 0.22 * Math.pow(km / 1000, 0.45));
 const lerp = (a, b, t) => a + (b - a) * t;
 
-// Abstand r (AE) im aktuellen Überblendungszustand
-const sceneDistance = (au, blend) => lerp(compressed(au), linear(au), blend);
+// Abstand r (AE) im aktuellen Überblendungszustand. Bis 1000 AE wie gehabt (Lehrbuch gestaucht,
+// Real linear); darüber logarithmisch weiter – sonst wären Oortsche Wolke und Nachbarsterne
+// (Hunderttausende AE) unbrauchbar weit weg: d(r) = d(1000 AE) · (1 + ln(r / 1000 AE)).
+const FAR_AU = 1000;
+const nearDistance = (au, blend) => lerp(compressed(au), linear(au), blend);
+export const sceneDistance = (au, blend) =>
+  au <= FAR_AU ? nearDistance(au, blend) : nearDistance(FAR_AU, blend) * (1 + Math.log(au / FAR_AU));
+export const AU_PER_LY = 63241.077;
+
+// Umkehrung (Szenenabstand → AE) per Bisektion, für die Positionsanzeige
+function inverseDistance(d, blend) {
+  let lo = 0, hi = 1e9;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (sceneDistance(mid, blend) < d) lo = mid; else hi = mid;
+  }
+  return lo;
+}
 
 // Ekliptik (x, y, z in AE) -> three.js (x, z, -y)
-function mapPoint(p, blend) {
+export function mapPoint(p, blend) {
   const z = p.z * blend; // Lehrbuch: auf die Ekliptik projiziert
   const r = Math.hypot(p.x, p.y, z);
   const k = r > 0 ? sceneDistance(r, blend) / r : 0;
@@ -73,7 +89,7 @@ const labelPriority = (body, layer) =>
 
 export function createSystemView(container, { onSelect }) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 2e6);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 5e6);
   camera.position.set(0, 120, 170);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
@@ -98,8 +114,8 @@ export function createSystemView(container, { onSelect }) {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.minDistance = 6;
-  controls.maxDistance = 250000;
+  controls.minDistance = 0.3;
+  controls.maxDistance = 600000;
 
   scene.add(createStarfield());
   scene.add(new THREE.AmbientLight(0xffffff, 0.1)); // schwach: Nachtseiten dunkel, aber nicht schwarz
@@ -281,6 +297,7 @@ export function createSystemView(container, { onSelect }) {
     geomBlend = blend;
     belts.update(date, blend, jupLon);
     updateHabitableZone();
+    updateFarObjects();
 
     for (const z of zoneLabels) z.obj.position.copy(polar(z.au, z.angle));
     trojanLabel.position.copy(polar(5.2, jupLon + 60));
@@ -349,9 +366,68 @@ export function createSystemView(container, { onSelect }) {
     hzLabel.position.copy(polar((inner + outer) / 2, 215));
   }
 
+  // --- Oortsche Wolke (theoretisch, nie direkt beobachtet) -----------------------------------
+  // Innere „Hills-Wolke“ 2.000–20.000 AE (scheibenartig), äußere Wolke 20.000–100.000 AE (kugelförmig).
+  // Statistische Darstellung – die Körper bewegen sich über Millionen Jahre, hier ruhend.
+  const OORT_N = 7000;
+  const oortAu = new Float32Array(OORT_N * 3);
+  for (let i = 0; i < OORT_N; i++) {
+    const inner = i < OORT_N * 0.4;
+    const r = inner ? 2000 * Math.pow(10, Math.random()) : 20000 * Math.pow(5, Math.random()); // log-gleichverteilt
+    const lon = Math.random() * Math.PI * 2;
+    const lat = inner
+      ? (Math.random() + Math.random() + Math.random() - 1.5) * 0.45 // abgeflacht zur Ekliptik
+      : Math.asin(Math.random() * 2 - 1);                             // gleichmäßig auf der Kugel
+    oortAu.set([r * Math.cos(lat) * Math.cos(lon), r * Math.cos(lat) * Math.sin(lon), r * Math.sin(lat)], i * 3);
+  }
+  const oortGeo = new THREE.BufferGeometry();
+  oortGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(OORT_N * 3), 3));
+  const oort = new THREE.Points(oortGeo, new THREE.PointsMaterial({
+    color: 0x9fc4ff, size: 1.3, sizeAttenuation: false, transparent: true, opacity: 0.35, depthWrite: false,
+  }));
+  const oortLabel = makeLabel('Oortsche Wolke · theoretisch', 'zone-label');
+  layers.oort = new THREE.Group();
+  layers.oort.add(oort, oortLabel);
+  scene.add(layers.oort);
+  declutterItems.push({ el: oortLabel.element, id: null, prio: 40 });
+
+  // --- Planet Neun: hypothetische Modellbahn (Brown & Batygin 2021) --------------------------
+  // a ≈ 380 AE, e ≈ 0,2, i ≈ 16°, Perihel-Länge ≈ 254°; Lage und Existenz sehr unsicher.
+  const PLANET_NINE = { kepler: { a: 380, e: 0.2, i: 16, node: 97, peri: 157, M: 0, n: 0, epochJd: 2451545 } };
+  const p9Geo = new THREE.BufferGeometry();
+  p9Geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((ORBIT_STEPS + 1) * 3), 3));
+  const p9 = new THREE.Line(p9Geo, new THREE.LineDashedMaterial({
+    color: 0xff8fb1, dashSize: 6, gapSize: 6, transparent: true, opacity: 0.55,
+  }));
+  const p9Label = makeLabel('Planet Neun? · hypothetische Bahn', 'zone-label p9-label');
+  layers.planet9 = new THREE.Group();
+  layers.planet9.add(p9, p9Label);
+  scene.add(layers.planet9);
+  declutterItems.push({ el: p9Label.element, id: null, prio: 41 });
+
+  function updateFarObjects() {
+    const arr = oortGeo.attributes.position.array;
+    const v = { x: 0, y: 0, z: 0 };
+    for (let i = 0; i < OORT_N; i++) {
+      v.x = oortAu[i * 3]; v.y = oortAu[i * 3 + 1]; v.z = oortAu[i * 3 + 2];
+      mapPoint(v, blend).toArray(arr, i * 3);
+    }
+    oortGeo.attributes.position.needsUpdate = true;
+    oortGeo.computeBoundingSphere();
+    oortLabel.position.copy(polar(30000, 120));
+
+    const pa = p9Geo.attributes.position.array;
+    orbitPath(PLANET_NINE, date, ORBIT_STEPS).forEach((pt, i) => mapPoint(pt, blend).toArray(pa, i * 3));
+    p9Geo.attributes.position.needsUpdate = true;
+    p9Geo.computeBoundingSphere();
+    p9.material.dashSize = p9.material.gapSize = sceneDistance(380, blend) * 0.025; // Strichlänge passend zum Maßstab
+    p9.computeLineDistances();
+    p9Label.position.fromBufferAttribute(p9Geo.attributes.position, Math.round(ORBIT_STEPS / 2));
+  }
+
   // --- Sternansicht: weit herausgezoomt bleibt nur die Sonne als Stern ------------------
   // samt Koordinatenkreuz (ICRS über Quasare, Richtung galaktisches Zentrum/Nordpol).
-  const STAR_VIEW_AU = 1500;
+  const STAR_VIEW_AU = 150000; // jenseits der Oortschen Wolke
   const starGroup = new THREE.Group();
   starGroup.visible = false;
   scene.add(starGroup);
@@ -370,7 +446,7 @@ export function createSystemView(container, { onSelect }) {
     const d = new THREE.Vector3(ref.dir.x, ref.dir.z, -ref.dir.y).normalize(); // Ekliptik → Szene
     const arrow = new THREE.ArrowHelper(d, new THREE.Vector3(), 1, ref.color, 0.06, 0.025);
     arrow.line.material.transparent = true;
-    arrow.line.material.opacity = 0.7;
+    arrow.line.material.opacity = 0.4;
     const lbl = makeLabel(ref.name, 'ref-label');
     lbl.position.set(0, 1.08, 0); // Pfeilspitze (lokale y-Achse des ArrowHelper)
     arrow.add(lbl);
@@ -387,7 +463,7 @@ export function createSystemView(container, { onSelect }) {
       pts.push(u.clone().multiplyScalar(Math.cos(a)).add(v.clone().multiplyScalar(Math.sin(a))).multiplyScalar(0.8));
     }
     refArrows.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({ color: 0xffb86b, transparent: true, opacity: 0.25 })));
+      new THREE.LineBasicMaterial({ color: 0xffb86b, transparent: true, opacity: 0.1 })));
   }
   const layerOn = {};
   let starView = false;
@@ -442,13 +518,17 @@ export function createSystemView(container, { onSelect }) {
     // Ausdehnung aus der Begrenzungskugel (auch für verbeulte/skalierte Körper); bei Planeten mit
     // Monden so weit zurück, dass das Mondsystem ins Bild passt
     const r = meshRadius(mesh);
-    const back = Math.max(r * 8 + 10, moons.extent(bodyId) * 2.2);
+    const isMoon = !bodies.has(bodyId);
+    // Monde: dicht heran (der Planet bleibt im Hintergrund sichtbar); Planeten: ganzes Mondsystem im Bild
+    const back = isMoon ? r * 7 + 0.2 : Math.max(r * 8 + 10, moons.extent(bodyId) * 2.2);
+    controls.minDistance = Math.max(0.02, r * 1.3);
     const target = worldPos(bodyId);
     flyTo(target.clone().add(new THREE.Vector3(0, back * 0.45 + r * 2, back)), target, bodyId);
   }
 
   // Überblick über einen Bereich bis `au` AE
   function frame(au) {
+    controls.minDistance = 0.3;
     const d = sceneDistance(au, blendTarget) * 1.25 + 8;
     flyTo(new THREE.Vector3(0, d * 0.75, d * 1.05), new THREE.Vector3());
   }
@@ -563,6 +643,14 @@ export function createSystemView(container, { onSelect }) {
       if (!starView) layers[name].visible = visible;
     },
     setOrbitMode(mode) { orbitMode = mode; applyOrbitStyle(); },
+    // Kameraposition: Abstand zur Sonne (AE) und ekliptikale Länge/Breite (Grad)
+    cameraInfo() {
+      const c = camera.position;
+      const au = inverseDistance(c.length(), blend);
+      const lambda = (Math.atan2(-c.z, c.x) * 180 / Math.PI + 360) % 360;
+      const beta = Math.asin(Math.max(-1, Math.min(1, c.y / (c.length() || 1)))) * 180 / Math.PI;
+      return { au, lambda, beta, real: blend > 0.5 };
+    },
     select(id) { selectedId = id; applyOrbitStyle(); },
     focus,
     frame,

@@ -251,3 +251,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--surface-strong); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
 }
 .map-pick select:focus { outline: none; border-color: var(--accent); }
+
+/* --- Positionsanzeige & Sternansicht (ruhiger) ------------------------------------- */
+.status { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.status .hud-k { color: var(--accent); margin-left: 6px; }
+.status small { color: var(--muted); }
+.system-label {
+  background: none !important; border: 0 !important; padding: 0 !important; transform: translateY(18px) !important;
+  opacity: 0.85;
+}
+.system-label strong { font-size: 11px !important; letter-spacing: 0.22em !important; color: #ffe2a0; text-shadow: 0 0 8px rgba(0,0,0,0.9); }
+.system-label span { font-size: 10px !important; opacity: 0.7; }
+.system-label:hover { opacity: 1; }
+.ref-label { font-size: 9px !important; color: rgba(200, 212, 240, 0.5) !important; letter-spacing: 0.08em; }
+.p9-label { color: rgba(255, 143, 177, 0.75) !important; }
+
+.nav a { white-space: nowrap; }
