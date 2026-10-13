@@ -65,26 +65,27 @@ const fragment = /* glsl */ `
     // Randverdunkelung
     float mu = clamp(dot(vNormal, vView), 0.0, 1.0);
     col *= 0.45 + 0.55 * pow(mu, 0.45);
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(col * 1.9, 1.0); // HDR (> 1) → löst den Bloom-Glanz aus
     #include <colorspace_fragment>
   }
 `;
 
-// --- Korona: Billboard hinter der Sonne, Flammen radial nach außen strömend ---------------
+// --- Korona: Billboard in der Sonnenmitte, Flammen radial nach außen strömend ---------------
+// Die Ebene liegt in der Sonnenmitte und steht senkrecht zur Sichtlinie auf die Mitte. Der Tiefentest
+// der Sonnenkugel verdeckt sie innen; ihre Größe ist in „scheinbaren Silhouettenradien“ skaliert
+// (uRim, pro Bild aktualisiert), damit Kugelrand und Koronarand auch aus der Nähe lückenlos aneinanderliegen.
 const coronaVertex = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
-  uniform float uSize;   // halbe Kantenlänge in Welteinheiten
-  uniform float uRadius; // Sonnenradius
+  uniform float uSize;   // halbe Kantenlänge in Welteinheiten (= Ausdehnung × scheinbarer Silhouettenradius)
   varying vec2 vP;
   void main() {
     vP = position.xy;
     vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-    // Ebene um einen Sonnenradius nach hinten schieben, damit die Sonnenkugel sie per Tiefentest
-    // verdeckt; Größe mit der Perspektive nachführen, als läge sie in der Sonnenmitte.
-    float d = max(-mv.z, 0.001);
-    mv.xy += position.xy * uSize * (d + uRadius) / d;
-    mv.z -= uRadius;
+    vec3 c = normalize(mv.xyz);                          // Sichtlinie zur Sonnenmitte
+    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), c));
+    vec3 up = cross(c, right);
+    mv.xyz += (right * position.x + up * position.y) * uSize;
     gl_Position = projectionMatrix * mv;
     #include <logdepthbuf_vertex>
   }
@@ -114,7 +115,7 @@ const coronaFragment = /* glsl */ `
 
   void main() {
     float r = length(vP) * uSpan;            // Abstand in Sonnenradien
-    if (r < 0.9 || r > uSpan * 0.98) discard;
+    if (r < 0.97 || r > uSpan * 0.98) discard; // innen verdeckt die Kugel (Tiefentest)
     #include <logdepthbuf_fragment>
     vec2 dir = vP / max(length(vP), 1e-4);   // Richtung statt Winkel → keine Naht
     float h = r - 1.0;                       // Höhe über dem Sonnenrand
@@ -141,7 +142,7 @@ const coronaFragment = /* glsl */ `
     float hot = clamp(inten * 0.6 - h * 0.3, 0.0, 1.0);
     vec3 col = mix(vec3(1.0, 0.28, 0.04), vec3(1.0, 0.82, 0.38), hot);
     col = mix(col, vec3(1.0, 0.95, 0.75), pow(hot, 3.0) * 0.35);
-    gl_FragColor = vec4(col, clamp(inten, 0.0, 1.0));
+    gl_FragColor = vec4(col * 1.6, clamp(inten, 0.0, 1.0));
     #include <colorspace_fragment>
   }
 `;
@@ -153,11 +154,10 @@ export function createSun(radius, map) {
     new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment })
   );
 
-  // Korona: ein einziger Billboard-Quad (additiv), 6 Sonnenradien Kantenlänge je Seite
+  // Korona: ein einziger Billboard-Quad (additiv), 6 scheinbare Sonnenradien Kantenlänge je Seite
   const span = 6;
   const coronaUniforms = {
-    uTime: uniforms.uTime, uSpan: { value: span },
-    uSize: { value: radius * span }, uRadius: { value: radius },
+    uTime: uniforms.uTime, uSpan: { value: span }, uSize: { value: radius * span },
   };
   const corona = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
@@ -170,11 +170,24 @@ export function createSun(radius, map) {
   corona.raycast = () => {};
   mesh.add(corona);
 
+  const camPos = new THREE.Vector3();
+  const sunPos = new THREE.Vector3();
+  // Radius der Kugel für die Randberechnung minimal verkleinert: das Kugelnetz ist ein Vieleck
+  // innerhalb des echten Kreises, so bleibt garantiert keine Haarlücke.
+  const rr = radius * 0.996;
+
   // Die Eigenrotation (mesh.rotation.y) setzt der Aufrufer aus dem simulierten Datum
   return {
     mesh,
-    tick(seconds) {
+    tick(seconds, camera) {
       uniforms.uTime.value = seconds;
+      if (!camera) return;
+      // Scheinbarer Silhouettenradius auf der Ebene durch die Mitte, senkrecht zur Sichtlinie:
+      // rim = r·d/√(d²−r²) mit d = Kameraabstand zur Sonnenmitte
+      camera.getWorldPosition(camPos);
+      mesh.getWorldPosition(sunPos);
+      const d = Math.max(camPos.distanceTo(sunPos), rr * 1.02);
+      coronaUniforms.uSize.value = (rr * d / Math.sqrt(d * d - rr * rr)) * span;
     },
   };
 }

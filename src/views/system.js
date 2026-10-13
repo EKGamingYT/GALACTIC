@@ -6,6 +6,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { BODIES } from '../data/bodies.js';
 import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
@@ -14,6 +18,9 @@ import { createSun } from '../lib/sun.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
 import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
+import { OBLATENESS, axisScale, lumpiness } from '../data/shapes.js';
+import { shapeGeometry, flattenGeometry } from '../lib/shape.js';
+import { enableGasFlow, gasTime, GAS_FLOW } from '../lib/gasflow.js';
 
 const loader = new THREE.TextureLoader();
 function loadTex(file) {
@@ -50,15 +57,38 @@ function mapPoint(p, blend) {
 
 const ORBIT_STEPS = 360;
 
+// Beleuchtung: Einstrahlung ∝ 1/r² (r in AE). Rein physikalisch wäre Neptun fast schwarz (1/900),
+// daher wahrnehmungsgerechte Abbildung: Faktor = (1/r²)^0.25 = r^−0.5, auf [0,22 … 1,7] begrenzt.
+const irradianceFactor = (rAu) => Math.min(1.7, Math.max(0.22, Math.pow(Math.max(rAu, 0.01), -0.5)));
+
+// Relief (bumpMap = Farbkarte) für felsige Körper: Stärke je Körper, sonst Standardwert
+const BUMP_SCALE = { mercury: 0.5, venus: 0.08, mars: 0.35 };
+const BUMP_DEFAULT = 0.5;
+
+// Beschriftungs-Priorität (höher gewinnt): Sonne/Planeten > Zwergplaneten > Gürtel/Zonen > Kleinkörper
+const labelPriority = (body, layer) =>
+  body.id === 'sun' ? 90 : !layer ? 80 : body.type === 'Zwergplanet' ? 60 : layer === 'dwarfs' ? 55 : 20;
+
 export function createSystemView(container, { onSelect }) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 2e6);
   camera.position.set(0, 120, 170);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // Handys: kleinere Auflösung, weniger MSAA und ein gröberer Bloom (günstiger)
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const pixelRatio = Math.min(window.devicePixelRatio, coarse ? 1.5 : 2);
+  renderer.setPixelRatio(pixelRatio);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
+
+  // Nachbearbeitung: HDR-Rendern → Bloom (nur sehr helle Bereiche: Sonne/Korona) → Ausgabe (sRGB)
+  const composer = new EffectComposer(renderer,
+    new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: coarse ? 2 : 4 }));
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 1.0);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
 
   const labels = new CSS2DRenderer();
   labels.domElement.className = 'labels';
@@ -70,7 +100,7 @@ export function createSystemView(container, { onSelect }) {
   controls.maxDistance = 80000;
 
   scene.add(createStarfield());
-  scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.1)); // schwach: Nachtseiten dunkel, aber nicht schwarz
   scene.add(new THREE.PointLight(0xfff2d0, 3, 0, 0));
 
   const layers = {
@@ -86,6 +116,7 @@ export function createSystemView(container, { onSelect }) {
 
   // --- Körper ----------------------------------------------------------------
   const bodies = new Map(); // id -> { body, mesh, orbit }
+  const declutterItems = []; // { el, id, prio } – für die automatische Beschriftungs-Entzerrung
   const sun = createSun(4, loadTex(TEXTURES.sun.map));
   for (const body of [...BODIES, ...SMALL_BODIES]) {
     if (body.parent) continue;
@@ -94,20 +125,36 @@ export function createSystemView(container, { onSelect }) {
     const layer = LAYER_OF[body.type];
     // Kleinkörper etwas kleiner als Planeten, aber anklickbar
     const radius = isSun ? 4 : layer ? Math.max(0.18, scaleRadius(body.radiusKm || 1) * 0.8) : scaleRadius(body.radiusKm);
-    const mesh = isSun
-      ? sun.mesh
-      : new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 32),
-        new THREE.MeshStandardMaterial({ map: tex ? loadTex(tex.map) : planetTexture(body), roughness: 0.95 }));
+    const flat = OBLATENESS[body.id] || 0; // echte Abplattung der Planeten
+    const isGas = !!GAS_FLOW[body.id];
+    const lit = []; // Materialien, deren Farbe mit der Sonneneinstrahlung skaliert wird
+    let mesh;
+    if (isSun) mesh = sun.mesh;
+    else {
+      // Kleinkörper: Achsverhältnisse aus gemessenen Abmessungen + Beulen (Näherung, kein exaktes Formmodell)
+      const geo = new THREE.SphereGeometry(radius, 64, 32);
+      if (layer) shapeGeometry(geo, { scale: axisScale(body), lumps: lumpiness(body), id: body.id });
+      else flattenGeometry(geo, flat);
+      const map = tex ? loadTex(tex.map) : planetTexture(body);
+      const mat = new THREE.MeshStandardMaterial({
+        map, roughness: 0.95,
+        emissive: new THREE.Color(body.color).multiplyScalar(0.05), // Nachtseite nie ganz schwarz
+      });
+      if (isGas) enableGasFlow(mat, body.id); // fließende Wolkenbänder
+      else if (body.id !== 'earth') { mat.bumpMap = map; mat.bumpScale = BUMP_SCALE[body.id] ?? BUMP_DEFAULT; } // Kraterrelief
+      lit.push(mat);
+      mesh = new THREE.Mesh(geo, mat);
+    }
     mesh.userData.body = body;
     (layer ? layers[layer] : scene).add(mesh);
-    if (tex?.scale) mesh.scale.set(...tex.scale);
-    if (tex?.clouds) mesh.add(createClouds(radius, tex.clouds));
-    const atmo = isSun ? null : createAtmosphere(body.id, radius);
+    if (tex?.clouds) { const c = createClouds(radius, tex.clouds, flat); mesh.add(c); lit.push(c.material); }
+    const atmo = isSun ? null : createAtmosphere(body.id, radius, flat);
     if (atmo) mesh.add(atmo);
-    if (body.ring) mesh.add(createRing(radius, tex?.ring));
+    if (body.ring) { const ring = createRing(radius, tex?.ring); mesh.add(ring); lit.push(ring.material); }
     const labelCls = !layer || layer === 'dwarfs' ? 'body-label' : 'minor-label';
-    const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body));
+    const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body), body.color);
     mesh.add(label);
+    declutterItems.push({ el: label.element, id: body.id, prio: labelPriority(body, layer) });
 
     let orbit = null;
     if (body.elements || body.kepler) {
@@ -120,7 +167,7 @@ export function createSystemView(container, { onSelect }) {
     const tail = body.type === 'Komet' ? createTail() : null;
     if (tail) layers.comets.add(tail);
     bodies.set(body.id, {
-      body, mesh, orbit, tail, minorLabel: labelCls === 'minor-label' ? label : null,
+      body, mesh, orbit, tail, lit, atmo, minorLabel: labelCls === 'minor-label' ? label : null,
       // Eigenrotation: Periode in Stunden (mit Vorzeichen) und zuletzt berechneter Winkel für die Anti-Strobe-Prüfung
       spinHours: rotationPeriod(body), lastSpin: null,
     });
@@ -137,10 +184,12 @@ export function createSystemView(container, { onSelect }) {
   ].map((z) => {
     const obj = makeLabel(z.text, z.cls);
     layers.zones.add(obj);
+    declutterItems.push({ el: obj.element, id: null, prio: 40 });
     return { ...z, obj };
   });
   const trojanLabel = makeLabel('Trojaner (L4)', 'belt-label');
   layers.zones.add(trojanLabel);
+  declutterItems.push({ el: trojanLabel.element, id: null, prio: 40 });
 
   // Grenze inneres/äußeres Sonnensystem: Außenrand des Asteroidengürtels
   const boundary = new THREE.LineLoop(
@@ -165,12 +214,20 @@ export function createSystemView(container, { onSelect }) {
   let blendTarget = 0;
   let selectedId = null;
 
+  let lastLightMs = null;
   function update() {
-    for (const { body, mesh, orbit, tail } of bodies.values()) {
+    for (const { body, mesh, orbit, tail, lit, atmo } of bodies.values()) {
       if (!orbit) continue;
       const helio = heliocentricPosition(body, date);
       mesh.position.copy(mapPoint(helio, blend));
-      if (tail) updateTail(tail, mesh.position, Math.hypot(helio.x, helio.y, helio.z));
+      const rAu = Math.hypot(helio.x, helio.y, helio.z);
+      if (tail) updateTail(tail, mesh.position, rAu);
+      // Sonneneinstrahlung nur bei Datumswechsel nachführen (nicht bei jedem Überblendungs-Bild)
+      if (lit && lastLightMs !== date.getTime()) {
+        const f = irradianceFactor(rAu);
+        for (const m of lit) m.color.setScalar(f);
+        atmo?.userData.setIrradiance(f);
+      }
       const arr = orbit.geometry.attributes.position.array;
       orbitPath(body, date, ORBIT_STEPS).forEach((p, i) => {
         const v = mapPoint(p, blend);
@@ -181,6 +238,7 @@ export function createSystemView(container, { onSelect }) {
       orbit.material.opacity = body.id === selectedId ? 0.9 : orbit.userData.baseOpacity;
     }
 
+    lastLightMs = date.getTime();
     const jup = heliocentricPosition(bodies.get('jupiter').body, date);
     const jupLon = Math.atan2(jup.y, jup.x) / (Math.PI / 180);
     belts.update(date, blend, jupLon);
@@ -228,7 +286,9 @@ export function createSystemView(container, { onSelect }) {
   function focus(bodyId) {
     const { mesh } = bodies.get(bodyId) || {};
     if (!mesh) return;
-    const r = mesh.geometry.parameters.radius;
+    // Ausdehnung aus der Begrenzungskugel (auch für verbeulte/skalierte Körper)
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+    const r = mesh.geometry.boundingSphere.radius * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
     const target = mesh.position.clone();
     flyTo(target.clone().add(new THREE.Vector3(0, r * 4 + 4, r * 8 + 10)), target, bodyId);
   }
@@ -245,6 +305,9 @@ export function createSystemView(container, { onSelect }) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    composer.setSize(w, h);
+    // Bloom läuft intern schon mit halber Auflösung; auf Handys noch gröber (¼)
+    if (coarse) bloom.setSize(Math.ceil(w * pixelRatio / 2), Math.ceil(h * pixelRatio / 2));
     labels.setSize(w, h);
   }
   new ResizeObserver(resize).observe(container);
@@ -252,11 +315,32 @@ export function createSystemView(container, { onSelect }) {
   let active = true;
   let lastFrame = null;
   let lastFollowPos = null;
+  let lastDeclutter = 0;
+
+  // Beschriftungen entzerren: nach Priorität sortieren; jede Beschriftung, die eine bereits
+  // behaltene (wichtigere) überdeckt, wird per CSS-Klasse ausgeblendet (Opacity-Übergang).
+  function declutter() {
+    const items = [];
+    for (const it of declutterItems) {
+      if (it.el.style.display === 'none') continue; // von CSS2D/Ebene/Distanzregel bereits versteckt
+      const r = it.el.getBoundingClientRect();
+      if (!r.width) continue;
+      items.push({ it, r, prio: it.id !== null && it.id === selectedId ? 100 : it.prio });
+    }
+    items.sort((a, b) => b.prio - a.prio);
+    const kept = [];
+    for (const { it, r } of items) {
+      const hit = kept.some((k) => r.left < k.right + 2 && r.right > k.left - 2 && r.top < k.bottom + 1 && r.bottom > k.top - 1);
+      if (it.hidden !== hit) { it.hidden = hit; it.el.classList.toggle('lbl-hide', hit); }
+      if (!hit) kept.push(r);
+    }
+  }
   renderer.setAnimationLoop(() => {
     if (!active) return;
     const now = performance.now() / 1000;
     lastFrame = now;
-    sun.tick(now);
+    sun.tick(now, camera);
+    gasTime.value = now;
     // Eigenrotation echt aus dem simulierten Datum: Winkel = 2π · (Zeit seit J2000 / Periode).
     // Anti-Strobe: springt der Winkel zwischen zwei Bildern um > 0,35 rad (schneller Zeitraffer),
     // bleibt der Körper einfach stehen, statt wild zu flackern.
@@ -294,8 +378,9 @@ export function createSystemView(container, { onSelect }) {
       if (minorLabel) minorLabel.visible = body.id === selectedId || camera.position.distanceTo(mesh.position) < 45;
     }
     controls.update();
-    renderer.render(scene, camera);
+    composer.render();
     labels.render(scene, camera);
+    if (now - lastDeclutter > 0.15) { lastDeclutter = now; declutter(); }
   });
   controls.addEventListener('start', () => { if (!flight) follow = null; });
 
@@ -326,10 +411,11 @@ export function createSystemView(container, { onSelect }) {
   };
 }
 
-function makeLabel(text, className, y = 0, onClick) {
+function makeLabel(text, className, y = 0, onClick, dotColor) {
   const el = document.createElement('div');
   el.className = className;
   el.textContent = text;
+  if (dotColor) el.style.setProperty('--dot', dotColor); // Farbpunkt vor dem Namen
   if (onClick) el.addEventListener('click', onClick);
   const obj = new CSS2DObject(el);
   obj.position.set(0, y, 0);
@@ -388,9 +474,9 @@ function createRing(radius, ringFile) {
 }
 
 // Wolkenschicht der Erde: dreht mit der Erde mit (Kind-Mesh) plus sehr langsamer eigener Drift
-function createClouds(radius, file) {
+function createClouds(radius, file, flat = 0) {
   const clouds = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * 1.02, 64, 32),
+    flattenGeometry(new THREE.SphereGeometry(radius * 1.02, 64, 32), flat),
     new THREE.MeshStandardMaterial({ alphaMap: loader.load(`/textures/${file}`), transparent: true, depthWrite: false })
   );
   clouds.onBeforeRender = () => (clouds.rotation.y = performance.now() * 2e-6); // ~0,002 rad/s

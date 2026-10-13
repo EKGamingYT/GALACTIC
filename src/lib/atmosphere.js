@@ -62,7 +62,7 @@ export const ATMOSPHERES = {
   neptune: { color: 0x4a70ff, strength: 0.7,  scale: 1.09, power: 3.0 },
 };
 
-function shell(radius, cfg, outer) {
+function shell(radius, cfg, outer, flatten) {
   const s = outer ? cfg.scale : 1.004;
   const mat = new THREE.ShaderMaterial({
     uniforms: {
@@ -81,15 +81,23 @@ function shell(radius, cfg, outer) {
     side: outer ? THREE.BackSide : THREE.FrontSide,
   });
   // 48x24 Segmente reichen für einen weichen Verlauf
-  return new THREE.Mesh(new THREE.SphereGeometry(radius * s, 48, 24), mat);
+  const geo = new THREE.SphereGeometry(radius * s, 48, 24);
+  if (flatten) geo.scale(1, 1 - flatten, 1); // Hülle folgt der Abplattung des Planeten
+  return new THREE.Mesh(geo, mat);
 }
 
-// Liefert eine Gruppe (Kind des Planeten-Meshes) oder null, falls der Körper keine Atmosphäre hat
-export function createAtmosphere(id, radius) {
+// Liefert eine Gruppe (Kind des Planeten-Meshes) oder null, falls der Körper keine Atmosphäre hat.
+// `flatten`: Abplattung des Planeten. `group.userData.setIrradiance(f)` dämpft/verstärkt den Schein
+// passend zur Sonneneinstrahlung (f = Beleuchtungsfaktor des Planeten).
+export function createAtmosphere(id, radius, flatten = 0) {
   const cfg = ATMOSPHERES[id];
   if (!cfg) return null;
   const g = new THREE.Group();
-  g.add(shell(radius, cfg, true), shell(radius, cfg, false));
+  g.add(shell(radius, cfg, true, flatten), shell(radius, cfg, false, flatten));
   g.children.forEach((m) => (m.raycast = () => {})); // nicht anklickbar
+  g.userData.setIrradiance = (f) => {
+    const k = Math.min(1.2, Math.max(0.35, f));
+    g.children.forEach((m) => (m.material.uniforms.uStrength.value = cfg.strength * k));
+  };
   return g;
 }
