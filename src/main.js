@@ -20,12 +20,17 @@ function bodyDetails(body) {
   return `
     <dl class="facts">
       <dt>Typ</dt><dd>${body.type}</dd>
-      <dt>Radius</dt><dd>${fmt(body.radiusKm, ' km')}</dd>
+      <dt>Radius</dt><dd>${fmt(body.radiusKm, ' km', 1)}${body.radiusSource === 'Literaturwert' ? ' <small>(Lit.)</small>' : ''}</dd>
+      ${body.kepler ? `
+      <dt>Umlaufzeit</dt><dd>${fmt(body.periodYears, ' Jahre', 1)}</dd>
+      <dt>Bahnneigung</dt><dd>${fmt(body.kepler.i, '°', 1)}</dd>
+      <dt>Exzentrizität</dt><dd>${fmt(body.kepler.e, '', 3)}</dd>
+      <dt>Rotation</dt><dd>${fmt(body.rotationHours, ' h', 2)}</dd>` : `
       <dt>Schwerkraft</dt><dd>${fmt(body.gravity, ' m/s²')}</dd>
       <dt>Tageslänge</dt><dd>${fmt(body.dayHours, ' h')}</dd>
-      <dt>Mittlere Temp.</dt><dd>${fmt(body.meanTempC, ' °C')}</dd>
+      <dt>Mittlere Temp.</dt><dd>${fmt(body.meanTempC, ' °C')}</dd>`}
       <dt>Monde</dt><dd>${fmt(body.moons)}</dd>
-      ${body.elements ? `
+      ${body.elements || body.kepler ? `
       <dt>Abstand zur Sonne</dt><dd data-live="sun">–</dd>
       ${body.id !== 'earth' ? '<dt>Abstand zur Erde</dt><dd data-live="earth">–</dd>' : ''}` : ''}
     </dl>`;
@@ -34,7 +39,7 @@ function bodyDetails(body) {
 // Live-Werte im Panel (ändern sich mit der eingestellten Zeit)
 let panelBody = null;
 function updatePanelLive() {
-  if (!panelBody?.elements || panel.classList.contains('hidden')) return;
+  if (!(panelBody?.elements || panelBody?.kepler) || panel.classList.contains('hidden')) return;
   const date = clock.date();
   const p = heliocentricPosition(panelBody, date);
   const e = heliocentricPosition(bodyById('earth'), date);
@@ -64,13 +69,16 @@ function selectBody(body) {
   showPanel(`
     <p class="eyebrow">${body.type}</p>
     <h2 style="--accent:${body.color}">${body.name}</h2>
+    ${body.description ? `<p class="desc">${body.description}</p>` : ''}
     ${bodyDetails(body)}
     <div class="actions">
-      ${body.elements ? `<button data-act="focus">Heranfliegen</button>` : ''}
+      ${body.elements || body.kepler ? `<button data-act="focus">Heranfliegen</button>` : ''}
       ${body.map ? `<a class="primary" href="#/body/${body.id}">Karte öffnen</a>` : ''}
       ${children.filter((c) => c.map).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
     </div>
-    <p class="muted small">Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)</p>`);
+    <p class="muted small">${body.kepler
+      ? `Quelle: JPL Small-Body Database (${body.fullname}). Bahn als Zweikörper-Näherung – bei Kometen über Jahrzehnte ungenau.`
+      : 'Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)'}</p>`);
   panel.querySelector('[data-act="focus"]')?.addEventListener('click', () => system.focus(body.id));
   updatePanelLive();
 }
@@ -117,6 +125,7 @@ controls.innerHTML = `
       <button data-frame="52">Gesamt</button>
       <button data-frame="3.5">Inneres</button>
       <button data-frame="35">Äußeres</button>
+      <button data-frame="900" title="Bis zur Bahn von Sedna">Fern</button>
     </div>
   </div>
   <div class="vc-group">
@@ -124,6 +133,9 @@ controls.innerHTML = `
     <label><input type="checkbox" data-layer="orbits" checked /> Bahnen</label>
     <label><input type="checkbox" data-layer="belts" checked /> Gürtel</label>
     <label><input type="checkbox" data-layer="zones" checked /> Zonen</label>
+    <label><input type="checkbox" data-layer="dwarfs" checked /> Zwergplaneten</label>
+    <label><input type="checkbox" data-layer="asteroids" checked /> Asteroiden</label>
+    <label><input type="checkbox" data-layer="comets" checked /> Kometen</label>
   </div>
   <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;
 $('#view-system').appendChild(controls);

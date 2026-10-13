@@ -53,7 +53,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--text); background: rgba(8, 12, 24, 0.55); border: 1px solid var(--line);
   border-radius: 999px; white-space: nowrap; transform: translateY(-8px);
 }
-.body-label:hover { border-color: var(--accent); }
+.body-label:hover, .minor-label:hover { border-color: var(--accent); }
+.minor-label {
+  pointer-events: auto; cursor: pointer; padding: 1px 6px; font-size: 10px; color: var(--muted);
+  background: rgba(8, 12, 24, 0.4); border: 1px solid transparent; border-radius: 999px; white-space: nowrap;
+  transform: translateY(-6px);
+}
+.desc { margin: -4px 0 14px; color: #c9d3ea; font-size: 13px; }
 
 /* Segment-Umschalter */
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-strong); border: 1px solid var(--line); border-radius: 9px; }

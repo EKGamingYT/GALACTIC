@@ -35,22 +35,39 @@ function toEcliptic(a, e, I, omega, node, E) {
   };
 }
 
-export function heliocentricPosition(body, date) {
+// Liefert [a, e, I, ω, Ω, M] (Grad) zum Datum – für große Planeten aus den
+// Standish-Elementen, für Kleinkörper aus JPL-Elementen zur Epoche (Zweikörper-Näherung).
+function elementsAt(body, date) {
+  if (body.kepler) {
+    const k = body.kepler;
+    const M = k.M + k.n * (julianDate(date) - k.epochJd);
+    return [k.a, k.e, k.i, k.peri, k.node, M];
+  }
   const [a, e, I, L, peri, node] = currentElements(body, date);
-  let M = ((L - peri) % 360) * DEG;
+  return [a, e, I, peri - node, node, L - peri];
+}
+
+export function heliocentricPosition(body, date) {
+  const [a, e, I, w, node, Mdeg] = elementsAt(body, date);
+  let M = (Mdeg % 360) * DEG;
   if (M > Math.PI) M -= 2 * Math.PI;
   if (M < -Math.PI) M += 2 * Math.PI;
   const E = solveKepler(M, e);
-  return toEcliptic(a, e, I * DEG, (peri - node) * DEG, node * DEG, E);
+  return toEcliptic(a, e, I * DEG, w * DEG, node * DEG, E);
 }
 
 // Vollständige Bahnellipse (für die Darstellung), `steps` Punkte.
+// Bei stark exzentrischen Bahnen (Kometen) liegen die Punkte nahe dem Perihel
+// (E = 0 bzw. 2π) dichter, damit die enge Kurve um die Sonne glatt bleibt.
 export function orbitPath(body, date, steps = 360) {
-  const [a, e, I, , peri, node] = currentElements(body, date);
+  const [a, e, I, w, node] = elementsAt(body, date);
   const pts = [];
   for (let i = 0; i <= steps; i++) {
-    const E = (i / steps) * 2 * Math.PI;
-    pts.push(toEcliptic(a, e, I * DEG, (peri - node) * DEG, node * DEG, E));
+    const u = (i / steps) * 2 - 1; // -1 … 1
+    const E = e > 0.5
+      ? Math.PI * (1 + Math.sign(u) * Math.pow(Math.abs(u), 0.6))
+      : (i / steps) * 2 * Math.PI;
+    pts.push(toEcliptic(a, e, I * DEG, w * DEG, node * DEG, E));
   }
   return pts;
 }

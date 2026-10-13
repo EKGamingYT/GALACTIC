@@ -10,6 +10,15 @@ import { BODIES } from '../data/bodies.js';
 import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
+import { createSun } from '../lib/sun.js';
+import SMALL from '../data/smallbodies.json';
+
+// Ebene je Kleinkörper-Kategorie
+const LAYER_OF = {
+  'Zwergplanet': 'dwarfs', 'Zwergplanet-Kandidat': 'dwarfs',
+  'Asteroid': 'asteroids', 'Erdnaher Asteroid': 'asteroids', 'Komet': 'comets',
+};
+export const SMALL_BODIES = SMALL.bodies;
 
 const AU_REAL = 30; // Szeneneinheiten pro AE im Realmodus
 const compressed = (au) => 14 * Math.pow(au, 0.55);
@@ -32,10 +41,10 @@ const ORBIT_STEPS = 360;
 
 export function createSystemView(container, { onSelect }) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 60000);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 2e6);
   camera.position.set(0, 120, 170);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
@@ -47,7 +56,7 @@ export function createSystemView(container, { onSelect }) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.minDistance = 6;
-  controls.maxDistance = 6000;
+  controls.maxDistance = 80000;
 
   scene.add(createStarfield());
   scene.add(new THREE.AmbientLight(0xffffff, 0.22));
@@ -57,33 +66,44 @@ export function createSystemView(container, { onSelect }) {
     orbits: new THREE.Group(),
     belts: new THREE.Group(),
     zones: new THREE.Group(),
+    dwarfs: new THREE.Group(),
+    asteroids: new THREE.Group(),
+    comets: new THREE.Group(),
   };
+  const smallOrbits = [];
   Object.values(layers).forEach((g) => scene.add(g));
 
   // --- Körper ----------------------------------------------------------------
   const bodies = new Map(); // id -> { body, mesh, orbit }
-  for (const body of BODIES) {
+  const sun = createSun(4);
+  for (const body of [...BODIES, ...SMALL_BODIES]) {
     if (body.parent) continue;
     const isSun = body.id === 'sun';
-    const radius = isSun ? 4 : scaleRadius(body.radiusKm);
-    const material = isSun
-      ? new THREE.MeshBasicMaterial({ color: body.color })
-      : new THREE.MeshStandardMaterial({ map: planetTexture(body), roughness: 0.9 });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 24), material);
+    const layer = LAYER_OF[body.type];
+    // Kleinkörper etwas kleiner als Planeten, aber anklickbar
+    const radius = isSun ? 4 : layer ? Math.max(0.18, scaleRadius(body.radiusKm || 1) * 0.8) : scaleRadius(body.radiusKm);
+    const mesh = isSun
+      ? sun.mesh
+      : new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16),
+        new THREE.MeshStandardMaterial({ map: planetTexture(body), roughness: 0.9 }));
     mesh.userData.body = body;
-    scene.add(mesh);
-    if (isSun) mesh.add(createGlow(radius));
+    (layer ? layers[layer] : scene).add(mesh);
     if (body.ring) mesh.add(createRing(radius));
-    mesh.add(makeLabel(body.name, 'body-label', radius + 0.9, () => onSelect(body)));
+    const labelCls = !layer || layer === 'dwarfs' ? 'body-label' : 'minor-label';
+    const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body));
+    mesh.add(label);
 
     let orbit = null;
-    if (body.elements) {
+    if (body.elements || body.kepler) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((ORBIT_STEPS + 1) * 3), 3));
-      orbit = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: body.color, transparent: true, opacity: 0.35 }));
-      layers.orbits.add(orbit);
+      orbit = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: body.color, transparent: true, opacity: layer ? 0.2 : 0.35 }));
+      orbit.userData.baseOpacity = orbit.material.opacity;
+      if (layer) { layers[layer].add(orbit); smallOrbits.push(orbit); } else layers.orbits.add(orbit);
     }
-    bodies.set(body.id, { body, mesh, orbit });
+    const tail = body.type === 'Komet' ? createTail() : null;
+    if (tail) layers.comets.add(tail);
+    bodies.set(body.id, { body, mesh, orbit, tail, minorLabel: labelCls === 'minor-label' ? label : null });
   }
 
   // --- Gürtel & Zonen ----------------------------------------------------------
@@ -116,9 +136,11 @@ export function createSystemView(container, { onSelect }) {
   let selectedId = null;
 
   function update() {
-    for (const { body, mesh, orbit } of bodies.values()) {
-      if (!body.elements) continue;
-      mesh.position.copy(mapPoint(heliocentricPosition(body, date), blend));
+    for (const { body, mesh, orbit, tail } of bodies.values()) {
+      if (!orbit) continue;
+      const helio = heliocentricPosition(body, date);
+      mesh.position.copy(mapPoint(helio, blend));
+      if (tail) updateTail(tail, mesh.position, Math.hypot(helio.x, helio.y, helio.z));
       const arr = orbit.geometry.attributes.position.array;
       orbitPath(body, date, ORBIT_STEPS).forEach((p, i) => {
         const v = mapPoint(p, blend);
@@ -126,7 +148,7 @@ export function createSystemView(container, { onSelect }) {
       });
       orbit.geometry.attributes.position.needsUpdate = true;
       orbit.geometry.computeBoundingSphere();
-      orbit.material.opacity = body.id === selectedId ? 0.9 : 0.35;
+      orbit.material.opacity = body.id === selectedId ? 0.9 : orbit.userData.baseOpacity;
     }
 
     const jup = heliocentricPosition(bodies.get('jupiter').body, date);
@@ -201,6 +223,7 @@ export function createSystemView(container, { onSelect }) {
   let lastFollowPos = null;
   renderer.setAnimationLoop(() => {
     if (!active) return;
+    sun.tick(performance.now() / 1000);
     if (blend !== blendTarget) {
       blend += Math.sign(blendTarget - blend) * 0.025;
       if (Math.abs(blend - blendTarget) < 0.025) blend = blendTarget;
@@ -222,6 +245,10 @@ export function createSystemView(container, { onSelect }) {
       }
     }
     lastFollowPos = follow ? bodies.get(follow).mesh.position.clone() : null;
+    // Beschriftungen kleiner Objekte nur aus der Nähe (gegen Überlappung)
+    for (const { mesh, minorLabel, body } of bodies.values()) {
+      if (minorLabel) minorLabel.visible = body.id === selectedId || camera.position.distanceTo(mesh.position) < 45;
+    }
     controls.update();
     renderer.render(scene, camera);
     labels.render(scene, camera);
@@ -237,7 +264,10 @@ export function createSystemView(container, { onSelect }) {
       blendTarget = real ? 1 : 0;
       frame(52); // Überblick bis zum Kuipergürtel
     },
-    setLayer(name, visible) { layers[name].visible = visible; },
+    setLayer(name, visible) {
+      layers[name].visible = visible;
+      if (name === 'orbits') smallOrbits.forEach((o) => (o.visible = visible));
+    },
     select(id) { selectedId = id; update(); },
     focus,
     frame,
@@ -261,7 +291,7 @@ function createStarfield() {
   const col = new Float32Array(count * 3);
   const c = new THREE.Color();
   for (let i = 0; i < count; i++) {
-    const v = new THREE.Vector3().randomDirection().multiplyScalar(20000 + Math.random() * 20000);
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(400000 + Math.random() * 400000);
     pos.set([v.x, v.y, v.z], i * 3);
     c.setHSL(0.55 + Math.random() * 0.15, 0.4, 0.7 + Math.random() * 0.3);
     col.set([c.r, c.g, c.b], i * 3);
@@ -272,21 +302,21 @@ function createStarfield() {
   return new THREE.Points(geo, new THREE.PointsMaterial({ size: 1.5, sizeAttenuation: false, vertexColors: true }));
 }
 
-function createGlow(radius) {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, 'rgba(255,220,140,0.9)');
-  g.addColorStop(0.35, 'rgba(255,170,60,0.35)');
-  g.addColorStop(1, 'rgba(255,140,40,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: new THREE.CanvasTexture(canvas), depthWrite: false, blending: THREE.AdditiveBlending,
-  }));
-  sprite.scale.setScalar(radius * 7);
-  return sprite;
+// Kometenschweif: zeigt von der Sonne weg, wächst in Sonnennähe (< 5 AE)
+function createTail() {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array([0.85, 0.93, 1, 0, 0, 0]), 3));
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending }));
+}
+
+function updateTail(tail, pos, rAu) {
+  tail.visible = rAu < 5;
+  const len = Math.min(25, 6 / Math.max(rAu, 0.3));
+  const end = pos.clone().add(pos.clone().normalize().multiplyScalar(len));
+  tail.geometry.attributes.position.array.set([pos.x, pos.y, pos.z, end.x, end.y, end.z]);
+  tail.geometry.attributes.position.needsUpdate = true;
+  tail.geometry.computeBoundingSphere();
 }
 
 function createRing(radius) {
