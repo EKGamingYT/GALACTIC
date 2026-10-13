@@ -11,6 +11,15 @@ import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
 import { createSun } from '../lib/sun.js';
+import { TEXTURES } from '../data/textures.js';
+
+const loader = new THREE.TextureLoader();
+function loadTex(file) {
+  const tex = loader.load(`/textures/${file}`);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
 import SMALL from '../data/smallbodies.json';
 
 // Ebene je Kleinkörper-Kategorie
@@ -75,20 +84,23 @@ export function createSystemView(container, { onSelect }) {
 
   // --- Körper ----------------------------------------------------------------
   const bodies = new Map(); // id -> { body, mesh, orbit }
-  const sun = createSun(4);
+  const sun = createSun(4, loadTex(TEXTURES.sun.map));
   for (const body of [...BODIES, ...SMALL_BODIES]) {
     if (body.parent) continue;
     const isSun = body.id === 'sun';
+    const tex = TEXTURES[body.id];
     const layer = LAYER_OF[body.type];
     // Kleinkörper etwas kleiner als Planeten, aber anklickbar
     const radius = isSun ? 4 : layer ? Math.max(0.18, scaleRadius(body.radiusKm || 1) * 0.8) : scaleRadius(body.radiusKm);
     const mesh = isSun
       ? sun.mesh
-      : new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16),
-        new THREE.MeshStandardMaterial({ map: planetTexture(body), roughness: 0.9 }));
+      : new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 32),
+        new THREE.MeshStandardMaterial({ map: tex ? loadTex(tex.map) : planetTexture(body), roughness: 0.95 }));
     mesh.userData.body = body;
     (layer ? layers[layer] : scene).add(mesh);
-    if (body.ring) mesh.add(createRing(radius));
+    if (tex?.scale) mesh.scale.set(...tex.scale);
+    if (tex?.clouds) mesh.add(createClouds(radius, tex.clouds));
+    if (body.ring) mesh.add(createRing(radius, tex?.ring));
     const labelCls = !layer || layer === 'dwarfs' ? 'body-label' : 'minor-label';
     const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body));
     mesh.add(label);
@@ -220,10 +232,21 @@ export function createSystemView(container, { onSelect }) {
   new ResizeObserver(resize).observe(container);
 
   let active = true;
+  let lastFrame = null;
   let lastFollowPos = null;
   renderer.setAnimationLoop(() => {
     if (!active) return;
-    sun.tick(performance.now() / 1000);
+    const now = performance.now() / 1000;
+    const dt = Math.min(0.1, now - (lastFrame ?? now));
+    lastFrame = now;
+    sun.tick(now);
+    // Eigenrotation (visuell verlangsamt; Richtung aus der Tageslänge, Venus rückläufig)
+    for (const { body, mesh } of bodies.values()) {
+      if (body.id === 'sun') continue;
+      const day = body.dayHours ?? body.rotationHours ?? 24;
+      const dir = body.id === 'venus' || body.id === 'uranus' ? -1 : 1;
+      mesh.rotation.y += dir * dt * Math.min(0.6, Math.max(0.02, 2.4 / day));
+    }
     if (blend !== blendTarget) {
       blend += Math.sign(blendTarget - blend) * 0.025;
       if (Math.abs(blend - blendTarget) < 0.025) blend = blendTarget;
@@ -319,12 +342,30 @@ function updateTail(tail, pos, rAu) {
   tail.geometry.computeBoundingSphere();
 }
 
-function createRing(radius) {
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(radius * 1.3, radius * 2.3, 96),
-    new THREE.MeshBasicMaterial({ color: 0xd8c690, side: THREE.DoubleSide, transparent: true, opacity: 0.55 })
-  );
+function createRing(radius, ringFile) {
+  const inner = radius * 1.25, outer = radius * 2.3;
+  const geo = new THREE.RingGeometry(inner, outer, 128);
+  // UV radial ausrichten, damit die Ringtextur (Streifen von innen nach außen) passt
+  const pos = geo.attributes.position, uv = geo.attributes.uv, v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    uv.setXY(i, (v.length() - inner) / (outer - inner), 0.5);
+  }
+  const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    ...(ringFile ? { map: loadTex(ringFile) } : { color: 0xd8c690, opacity: 0.55 }),
+    side: THREE.DoubleSide, transparent: true, depthWrite: false,
+  }));
   ring.rotation.x = -Math.PI / 2 + 0.47; // ~26,7° Achsneigung
   return ring;
+}
+
+// Wolkenschicht der Erde, dreht sich leicht schneller als die Oberfläche
+function createClouds(radius, file) {
+  const clouds = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 1.02, 64, 32),
+    new THREE.MeshStandardMaterial({ alphaMap: loader.load(`/textures/${file}`), transparent: true, depthWrite: false })
+  );
+  clouds.onBeforeRender = () => (clouds.rotation.y += 0.0004);
+  return clouds;
 }
 

@@ -1,4 +1,4 @@
-// Animierte Sonne: prozedurale Granulation (fBm-Rauschen) mit Randverdunkelung
+// Animierte Sonne: echte Sonnentextur, durch fBm-Rauschen animiert, mit Randverdunkelung
 // im Shader, dazu ein pulsierender Korona-Schein.
 import * as THREE from 'three';
 
@@ -6,8 +6,10 @@ const vertex = /* glsl */ `
   varying vec3 vPos;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying vec2 vUv;
   void main() {
     vPos = position;
+    vUv = uv;
     vNormal = normalize(normalMatrix * normal);
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     vView = normalize(-mv.xyz);
@@ -17,6 +19,8 @@ const vertex = /* glsl */ `
 
 const fragment = /* glsl */ `
   uniform float uTime;
+  uniform sampler2D uMap;
+  varying vec2 vUv;
   varying vec3 vPos;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -43,7 +47,11 @@ const fragment = /* glsl */ `
     float n = fbm(p + vec3(t, -t * 0.7, t * 0.4));
     float cells = fbm(p * 3.5 - vec3(t * 1.6));
     float heat = clamp(n * 0.65 + cells * 0.45, 0.0, 1.0);
-    vec3 col = mix(vec3(0.95, 0.35, 0.05), vec3(1.0, 0.85, 0.45), heat);
+    // echte Sonnentextur, durch das Rauschen leicht verzerrt → „kochende“ Oberfläche
+    vec2 warp = vec2(n - 0.5, cells - 0.5) * 0.012;
+    vec3 tex = texture2D(uMap, vUv + warp).rgb;
+    vec3 col = tex * (0.75 + heat * 0.6);
+    col = mix(col, vec3(1.0, 0.85, 0.45), heat * 0.25);
     col = mix(col, vec3(1.0, 0.97, 0.85), pow(heat, 4.0));
     // Sonnenflecken (selten, dunkel)
     float spot = smoothstep(0.72, 0.8, fbm(p * 0.9 + vec3(7.0, t * 0.2, 3.0)));
@@ -52,11 +60,12 @@ const fragment = /* glsl */ `
     float mu = clamp(dot(vNormal, vView), 0.0, 1.0);
     col *= 0.45 + 0.55 * pow(mu, 0.45);
     gl_FragColor = vec4(col, 1.0);
+    #include <colorspace_fragment>
   }
 `;
 
-export function createSun(radius) {
-  const uniforms = { uTime: { value: 0 } };
+export function createSun(radius, map) {
+  const uniforms = { uTime: { value: 0 }, uMap: { value: map } };
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 96, 48),
     new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment })

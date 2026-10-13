@@ -120,6 +120,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
 }
 .body-tabs.active { display: flex; }
+.layer-bar {
+  position: fixed; top: calc(var(--topbar-h) + 60px); left: 50%; transform: translateX(-50%); z-index: 10; display: none;
+  max-width: calc(100vw - 24px); overflow-x: auto;
+}
+.layer-bar.active { display: block; }
+.layer-bar .seg { background: var(--surface); backdrop-filter: blur(8px); }
 .body-tabs a { padding: 6px 14px; border-radius: 7px; color: var(--muted); }
 .body-tabs a.on { color: var(--text); background: rgba(110, 168, 255, 0.18); }
 

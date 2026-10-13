@@ -5,8 +5,8 @@
 // Format: [a (AU), e, I (°), L (°), Länge Perihel ϖ (°), Länge aufst. Knoten Ω (°)]
 // plus Änderung pro julianischem Jahrhundert in gleicher Reihenfolge.
 
-const trekTiles = (body, layer) =>
-  `https://trek.nasa.gov/tiles/${body}/EQ/${layer}/1.0.0/default/default028mm/{z}/{y}/{x}.jpg`;
+const trekTiles = (body, layer, ext = 'jpg') =>
+  `https://trek.nasa.gov/tiles/${body}/EQ/${layer}/1.0.0/default/default028mm/{z}/{y}/{x}.${ext}`;
 
 export const BODIES = [
   {
@@ -30,32 +30,43 @@ export const BODIES = [
     radiusKm: 6371, gravity: 9.8, dayHours: 24, meanTempC: 15, moons: 1,
     elements: [1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0],
     rates: [0.00000562, -0.00004392, -0.01294668, 35999.37244981, 0.32327364, 0],
-    map: {
-      // NASA GIBS: Blue Marble, EPSG:4326, 512-px-Kacheln.
-      url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/500m/{z}/{y}/{x}.jpeg',
-      tileSize: 512, maxLevel: 7, credit: 'NASA GIBS – Blue Marble',
-      // GIBS-EPSG:4326-Raster: Kachel auf Ebene 0 = 288°, Ursprung (-180, 90)
-      tilingRect: [-180, -198, 396, 90],
-    },
+    maps: [
+      {
+        // NASA GIBS: Blue Marble, EPSG:4326, 512-px-Kacheln; Ebene 0 = 288°-Kacheln ab (-180, 90)
+        name: 'Satellit', url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/500m/{z}/{y}/{x}.jpeg',
+        tileSize: 512, maxLevel: 7, tilingRect: [-180, -198, 396, 90], credit: 'NASA GIBS – Blue Marble',
+      },
+      {
+        name: 'Gestern (VIIRS)', mercator: true, maxLevel: 9, daily: true,
+        url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg',
+        credit: 'NASA GIBS – VIIRS/Suomi NPP, Aufnahme vom Vortag',
+      },
+      {
+        name: 'Straßen', mercator: true, maxLevel: 19, url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        credit: '© OpenStreetMap-Mitwirkende (ODbL)',
+      },
+    ],
     children: ['moon'],
   },
   {
     id: 'moon', name: 'Mond', type: 'Mond', parent: 'earth', color: '#cfcfcf',
     radiusKm: 1737.4, gravity: 1.62, dayHours: 708.7, meanTempC: -20, moons: null,
-    map: {
-      url: trekTiles('Moon', 'LRO_WAC_Mosaic_Global_303ppd_v02'),
-      tileSize: 256, maxLevel: 8, credit: 'NASA Moon Trek – LRO WAC Mosaik',
-    },
+    maps: [
+      { name: 'LRO WAC', url: trekTiles('Moon', 'LRO_WAC_Mosaic_Global_303ppd_v02'), maxLevel: 8, credit: 'NASA Moon Trek – LRO WAC Mosaik' },
+      { name: 'Kaguya (detailliert)', url: trekTiles('Moon', 'Kaguya_TCortho_Mosaic_Global_4096ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – JAXA SELENE/Kaguya Terrain Camera' },
+      { name: 'Relief (LOLA)', url: trekTiles('Moon', 'LRO_LOLAKaguya_ClrHillshade_60N60S_512ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – LRO LOLA + Kaguya, farbiges Höhenrelief (60° N–60° S)' },
+    ],
   },
   {
     id: 'mars', name: 'Mars', type: 'Planet', color: '#c8532a',
     radiusKm: 3389.5, gravity: 3.7, dayHours: 24.7, meanTempC: -65, moons: 2,
     elements: [1.52371034, 0.0933941, 1.84969142, -4.55343205, -23.94362959, 49.55953891],
     rates: [0.00001847, 0.00007882, -0.00813131, 19140.30268499, 0.44441088, -0.29257343],
-    map: {
-      url: trekTiles('Mars', 'Mars_Viking_MDIM21_ClrMosaic_global_232m'),
-      tileSize: 256, maxLevel: 7, credit: 'NASA Mars Trek – Viking MDIM 2.1 Farbmosaik',
-    },
+    maps: [
+      { name: 'Farbe (Viking)', url: trekTiles('Mars', 'Mars_Viking_MDIM21_ClrMosaic_global_232m'), maxLevel: 7, credit: 'NASA Mars Trek – Viking MDIM 2.1 Farbmosaik' },
+      { name: 'Relief (MOLA/HRSC)', url: trekTiles('Mars', 'Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw'), maxLevel: 8, credit: 'NASA Mars Trek – MGS MOLA + ESA Mars Express HRSC, 200 m' },
+      { name: 'Infrarot (THEMIS)', url: trekTiles('Mars', 'THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018', 'png'), maxLevel: 9, credit: 'NASA Mars Trek – Mars Odyssey THEMIS Tag-IR, 100 m (65° S–65° N)' },
+    ],
   },
   {
     id: 'jupiter', name: 'Jupiter', type: 'Planet', color: '#d9b38c', texture: 'bands',
@@ -90,4 +101,4 @@ export const BODIES = [
 ];
 
 export const bodyById = (id) => BODIES.find((b) => b.id === id);
-export const mappedBodies = () => BODIES.filter((b) => b.map);
+export const mappedBodies = () => BODIES.filter((b) => b.maps);

@@ -1,6 +1,7 @@
 import './style.css';
 import { bodyById, mappedBodies } from './data/bodies.js';
 import { heliocentricPosition } from './lib/orbits.js';
+import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
 import { createSystemView } from './views/system.js';
 import { createGlobeView } from './views/globe.js';
@@ -70,11 +71,12 @@ function selectBody(body) {
     <p class="eyebrow">${body.type}</p>
     <h2 style="--accent:${body.color}">${body.name}</h2>
     ${body.description ? `<p class="desc">${body.description}</p>` : ''}
+    ${TEXTURES[body.id]?.artistic ? '<p class="muted small">Oberfläche: künstlerische Darstellung – es gibt noch keine Nahaufnahmen.</p>' : ''}
     ${bodyDetails(body)}
     <div class="actions">
       ${body.elements || body.kepler ? `<button data-act="focus">Heranfliegen</button>` : ''}
-      ${body.map ? `<a class="primary" href="#/body/${body.id}">Karte öffnen</a>` : ''}
-      ${children.filter((c) => c.map).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
+      ${body.maps ? `<a class="primary" href="#/body/${body.id}">Karte öffnen</a>` : ''}
+      ${children.filter((c) => c.maps).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
     </div>
     <p class="muted small">${body.kepler
       ? `Quelle: JPL Small-Body Database (${body.fullname}). Bahn als Zweikörper-Näherung – bei Kometen über Jahrzehnte ungenau.`
@@ -99,7 +101,17 @@ function pickPoint(body, lat, lon) {
 // --- Ansichten ---------------------------------------------------------------
 const clock = createClock();
 const system = createSystemView($('#view-system'), { onSelect: selectBody });
-const globe = createGlobeView($('#view-body'), { onPick: pickPoint });
+const layerBar = document.createElement('div');
+layerBar.className = 'layer-bar';
+const globe = createGlobeView($('#view-body'), {
+  onPick: pickPoint,
+  // Ebenen-Umschalter der aktuellen Karte (z. B. Farbe / Relief / Infrarot)
+  onLayers: (body, active) => {
+    layerBar.innerHTML = `<div class="seg">${body.maps
+      .map((m, i) => `<button data-i="${i}" class="${i === active ? 'on' : ''}">${m.name}</button>`).join('')}</div>`;
+    layerBar.querySelectorAll('button').forEach((b) => (b.onclick = () => globe.setLayer(Number(b.dataset.i))));
+  },
+});
 createSkyView($('#view-sky'));
 
 createTimebar($('#view-system'), clock);
@@ -155,6 +167,7 @@ bodyTabs.className = 'body-tabs';
 bodyTabs.innerHTML = mappedBodies()
   .map((b) => `<a href="#/body/${b.id}" data-body="${b.id}">${b.name}</a>`).join('');
 $('#view-body').before(bodyTabs);
+bodyTabs.after(layerBar);
 
 // --- Routing (#/system, #/body/<id>, #/sky) ---------------------------------------
 function route() {
@@ -162,6 +175,7 @@ function route() {
   document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${view}`));
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
   bodyTabs.classList.toggle('active', view === 'body');
+  layerBar.classList.toggle('active', view === 'body');
   system.setActive(view === 'system');
 
   if (view === 'body') {

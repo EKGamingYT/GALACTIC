@@ -3,43 +3,60 @@
 import {
   Viewer, Globe, Ellipsoid, ImageryLayer, UrlTemplateImageryProvider, GeographicTilingScheme,
   ScreenSpaceEventHandler, ScreenSpaceEventType, Cartographic, Math as CesiumMath,
-  Credit, Color, Cartesian3, Ion, Rectangle,
+  Credit, Color, Cartesian3, Ion, Rectangle, WebMercatorTilingScheme,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
 Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kacheln
 
-export function createGlobeView(container, { onPick }) {
+// Kachelquelle für eine Kartenebene (geographisches oder Web-Mercator-Raster)
+function makeProvider(layer, ellipsoid) {
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  return new UrlTemplateImageryProvider({
+    url: layer.daily ? layer.url.replace('{date}', yesterday) : layer.url,
+    tilingScheme: layer.mercator
+      ? new WebMercatorTilingScheme({ ellipsoid })
+      : new GeographicTilingScheme({
+        ellipsoid,
+        ...(layer.tilingRect && { rectangle: Rectangle.fromDegrees(...layer.tilingRect) }),
+      }),
+    ...(!layer.mercator && { rectangle: Rectangle.fromDegrees(-180, -90, 180, 90) }),
+    tileWidth: layer.tileSize ?? 256,
+    tileHeight: layer.tileSize ?? 256,
+    maximumLevel: layer.maxLevel,
+    credit: new Credit(layer.credit, true),
+  });
+}
+
+export function createGlobeView(container, { onPick, onLayers }) {
   let viewer = null;
   let current = null;
+  let ellipsoid = null;
+  let currentBody = null;
+
+  function setLayer(index) {
+    if (!viewer) return;
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.add(new ImageryLayer(makeProvider(currentBody.maps[index], ellipsoid)));
+    onLayers?.(currentBody, index);
+  }
 
   function show(body) {
     if (current === body.id) return;
+    currentBody = body;
     viewer?.destroy();
     container.innerHTML = '';
     current = body.id;
 
     const r = body.radiusKm * 1000;
-    const ellipsoid = new Ellipsoid(r, r, r);
+    ellipsoid = new Ellipsoid(r, r, r);
     Ellipsoid.default = ellipsoid;
     const isEarth = body.id === 'earth';
 
-    const provider = new UrlTemplateImageryProvider({
-      url: body.map.url,
-      tilingScheme: new GeographicTilingScheme({
-        ellipsoid,
-        ...(body.map.tilingRect && { rectangle: Rectangle.fromDegrees(...body.map.tilingRect) }),
-      }),
-      rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-      tileWidth: body.map.tileSize,
-      tileHeight: body.map.tileSize,
-      maximumLevel: body.map.maxLevel,
-      credit: new Credit(body.map.credit),
-    });
 
     viewer = new Viewer(container, {
       globe: new Globe(ellipsoid),
-      baseLayer: new ImageryLayer(provider),
+      baseLayer: new ImageryLayer(makeProvider(body.maps[0], ellipsoid)),
       baseLayerPicker: false, geocoder: false, homeButton: true, sceneModePicker: true,
       navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
       infoBox: false, selectionIndicator: false,
@@ -66,7 +83,8 @@ export function createGlobeView(container, { onPick }) {
       const c = Cartographic.fromCartesian(cart, ellipsoid);
       onPick(body, CesiumMath.toDegrees(c.latitude), CesiumMath.toDegrees(c.longitude));
     }, ScreenSpaceEventType.LEFT_CLICK);
+    onLayers?.(body, 0);
   }
 
-  return { show, resize: () => viewer?.resize() };
+  return { show, setLayer, resize: () => viewer?.resize() };
 }
