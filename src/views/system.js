@@ -15,6 +15,7 @@ import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
 import { createSun } from '../lib/sun.js';
+import { createMoonSystems } from './moons.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
 import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
@@ -176,6 +177,30 @@ export function createSystemView(container, { onSelect }) {
     });
   }
 
+  // --- Mondsysteme ----------------------------------------------------------------
+  const meshRadius = (mesh) => {
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+    return mesh.geometry.boundingSphere.radius * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
+  };
+  const moons = createMoonSystems(scene, {
+    planetRadiusKm: (id) => bodies.get(id).body.radiusKm,
+    planetMesh: (id) => bodies.get(id).mesh,
+    sceneRadius: (id) => meshRadius(bodies.get(id).mesh),
+    loadTex,
+    makeLabel: (text, cls, y, body) => {
+      const l = makeLabel(text, cls, y, () => onSelect(body), body.color);
+      declutterItems.push({ el: l.element, id: body.id, prio: 25 });
+      return l;
+    },
+  });
+  // Weltposition eines Körpers oder großen Mondes
+  const worldPos = (id) => {
+    const b = bodies.get(id);
+    if (b) return b.mesh.position.clone();
+    const m = moons.get(id);
+    return m ? m.mesh.getWorldPosition(new THREE.Vector3()) : null;
+  };
+
   // --- Gürtel & Zonen ----------------------------------------------------------
   const belts = createBelts(mapPoint);
   layers.belts.add(belts.group);
@@ -248,6 +273,7 @@ export function createSystemView(container, { onSelect }) {
     applyOrbitStyle();
 
     lastLightMs = date.getTime();
+    moons.update(date, blend);
     const jup = heliocentricPosition(bodies.get('jupiter').body, date);
     const jupLon = Math.atan2(jup.y, jup.x) / (Math.PI / 180);
     if (!geom) return;
@@ -394,7 +420,7 @@ export function createSystemView(container, { onSelect }) {
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects([...bodies.values()].map((b) => b.mesh), false)[0];
+    const hit = raycaster.intersectObjects([...[...bodies.values()].map((b) => b.mesh), ...moons.meshes()], false)[0];
     if (hit) onSelect(hit.object.userData.body);
   });
 
@@ -411,13 +437,14 @@ export function createSystemView(container, { onSelect }) {
   }
 
   function focus(bodyId) {
-    const { mesh } = bodies.get(bodyId) || {};
+    const mesh = bodies.get(bodyId)?.mesh ?? moons.get(bodyId)?.mesh;
     if (!mesh) return;
-    // Ausdehnung aus der Begrenzungskugel (auch für verbeulte/skalierte Körper)
-    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
-    const r = mesh.geometry.boundingSphere.radius * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
-    const target = mesh.position.clone();
-    flyTo(target.clone().add(new THREE.Vector3(0, r * 4 + 4, r * 8 + 10)), target, bodyId);
+    // Ausdehnung aus der Begrenzungskugel (auch für verbeulte/skalierte Körper); bei Planeten mit
+    // Monden so weit zurück, dass das Mondsystem ins Bild passt
+    const r = meshRadius(mesh);
+    const back = Math.max(r * 8 + 10, moons.extent(bodyId) * 2.2);
+    const target = worldPos(bodyId);
+    flyTo(target.clone().add(new THREE.Vector3(0, back * 0.45 + r * 2, back)), target, bodyId);
   }
 
   // Überblick über einen Bereich bis `au` AE
@@ -492,14 +519,16 @@ export function createSystemView(container, { onSelect }) {
       if (flight.t >= 1) flight = null;
     } else if (follow) {
       // Kamera wandert mit dem verfolgten Körper mit
-      const pos = bodies.get(follow).mesh.position;
+      const pos = worldPos(follow);
       if (lastFollowPos) {
         const delta = pos.clone().sub(lastFollowPos);
         camera.position.add(delta);
         controls.target.add(delta);
       }
     }
-    lastFollowPos = follow ? bodies.get(follow).mesh.position.clone() : null;
+    lastFollowPos = follow ? worldPos(follow) : null;
+    if (starView) moons.setVisible(false);
+    else moons.updateVisibility(camera, selectedId);
     // Beschriftungen kleiner Objekte nur aus der Nähe (gegen Überlappung)
     for (const { mesh, minorLabel, body } of bodies.values()) {
       if (minorLabel) minorLabel.visible = body.id === selectedId || camera.position.distanceTo(mesh.position) < 45;

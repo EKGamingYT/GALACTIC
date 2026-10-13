@@ -2,6 +2,7 @@ import './style.css';
 import { BODIES, bodyById, mappedBodies } from './data/bodies.js';
 import { SOLAR_SYSTEM, HABITABLE_ZONE } from './data/solarsystem.js';
 import { SMALL_BODIES } from './views/system.js';
+import { moonBodies } from './views/moons.js';
 import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
@@ -20,7 +21,23 @@ const fmt = (n, unit = '', digits) =>
     ? '–'
     : `${n.toLocaleString('de-DE', digits !== undefined ? { maximumFractionDigits: digits } : {})}${unit}`;
 
+function moonDetails(m) {
+  const FRAME = { ecliptic: 'Ekliptik', laplace: 'Laplace-Ebene', equatorial: 'Äquator des Planeten' };
+  return `
+    <dl class="facts">
+      <dt>Typ</dt><dd>${m.type}</dd>
+      <dt>Radius</dt><dd>${fmt(m.radiusKm, ' km', 1)}</dd>
+      <dt>Abstand zum Planeten</dt><dd>${fmt(m.aKm, ' km', 0)}</dd>
+      <dt>Umlaufzeit</dt><dd>${fmt(m.periodDays, ' Tage', 2)}${m.retrograde ? ' <small>(rückläufig)</small>' : ''}</dd>
+      <dt>Exzentrizität</dt><dd>${fmt(m.e, '', 3)}</dd>
+      <dt>Bahnneigung</dt><dd>${fmt(m.iDeg, '°', 1)} <small>(${FRAME[m.frameCode] ?? m.frame})</small></dd>
+      ${m.densityGcm3 ? `<dt>Dichte</dt><dd>${fmt(m.densityGcm3, ' g/cm³', 2)}</dd>` : ''}
+      ${m.albedo ? `<dt>Albedo</dt><dd>${fmt(m.albedo, '', 2)}</dd>` : ''}
+    </dl>`;
+}
+
 function bodyDetails(body) {
+  if (body.isMoon) return moonDetails(body);
   return `
     <dl class="facts">
       <dt>Typ</dt><dd>${body.type}</dd>
@@ -108,11 +125,13 @@ function selectBody(body) {
     ${TEXTURES[body.id]?.artistic ? '<p class="muted small">Oberfläche: künstlerische Darstellung – es gibt noch keine Nahaufnahmen.</p>' : ''}
     ${bodyDetails(body)}
     <div class="actions">
-      ${body.elements || body.kepler || body.id === 'sun' ? `<button data-act="focus">Heranfliegen</button>` : ''}
+      ${body.elements || body.kepler || body.id === 'sun' || body.major ? `<button data-act="focus">Heranfliegen</button>` : ''}
       ${body.maps ? `<a class="primary" href="#/body/${body.id}">Karte öffnen</a>` : ''}
       ${children.filter((c) => c.maps).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
     </div>
-    <p class="muted small">${body.kepler
+    <p class="muted small">${body.isMoon
+      ? 'Quelle: NASA/JPL Solar System Dynamics – mittlere Bahnelemente und physikalische Parameter der Monde. Abstände in der Ansicht logarithmisch gestaucht.'
+      : body.kepler
       ? `Quelle: JPL Small-Body Database (${body.fullname}). Bahn als Zweikörper-Näherung – bei Kometen über Jahrzehnte ungenau.`
       : 'Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)'}</p>`);
   panel.querySelector('[data-act="focus"]')?.addEventListener('click', () => system.focus(body.id));
@@ -236,7 +255,8 @@ controls.querySelectorAll('[data-frame]').forEach((b) => (b.onclick = () => syst
 controls.querySelectorAll('[data-layer]').forEach((c) => (c.onchange = () => system.setLayer(c.dataset.layer, c.checked)));
 
 // --- Suche über alle Objekte --------------------------------------------------------------
-const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES];
+const MOON_BODIES = moonBodies();
+const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES, ...MOON_BODIES];
 const search = document.createElement('div');
 search.className = 'search';
 search.innerHTML = `<input type="search" placeholder="Objekt suchen …" aria-label="Objekt suchen" />
@@ -253,6 +273,7 @@ function goTo(body) {
   if (location.hash !== '#/system') location.hash = '#/system';
   selectBody(body);
   if (body.id === SOLAR_SYSTEM.id) system.frame(6000);
+  else if (body.isMoon && !body.major) system.focus(body.parent); // kleine Monde: zum Planeten fliegen
   else system.focus(body.id);
 }
 sInput.addEventListener('input', () => {
