@@ -34,6 +34,7 @@ function bodyDetails(body) {
       <dt>Monde</dt><dd>${fmt(body.moons)}</dd>
       ${body.elements || body.kepler ? `
       <dt>Abstand zur Sonne</dt><dd data-live="sun">–</dd>
+      <dt>Sonneneinstrahlung</dt><dd data-live="flux">–</dd>
       ${body.id !== 'earth' ? '<dt>Abstand zur Erde</dt><dd data-live="earth">–</dd>' : ''}` : ''}
     </dl>`;
 }
@@ -51,6 +52,9 @@ function updatePanelLive() {
   const sun = panel.querySelector('[data-live=sun]');
   const earth = panel.querySelector('[data-live=earth]');
   if (sun) sun.innerHTML = show(rSun);
+  // Solarkonstante 1361 W/m² bei 1 AE, nimmt mit 1/r² ab
+  const flux = panel.querySelector('[data-live=flux]');
+  if (flux) flux.innerHTML = `${fmt(1361 / (rSun * rSun), ' W/m²', rSun > 5 ? 2 : 0)} <small>(${fmt(100 / (rSun * rSun), ' % der Erde', rSun > 5 ? 2 : 0)})</small>`;
   if (earth) earth.innerHTML = show(rEarth);
 }
 

@@ -30,6 +30,8 @@ export const BODIES = [
     radiusKm: 6371, gravity: 9.8, dayHours: 24, meanTempC: 15, moons: 1,
     elements: [1.00000261, 0.01671123, -0.00001531, 100.46457166, 102.93768193, 0],
     rates: [0.00000562, -0.00004392, -0.01294668, 35999.37244981, 0.32327364, 0],
+    // Vollständiges Grundbild (inkl. Pole) unter allen Kartenebenen – sofort sichtbar
+    mapFallback: '/textures/2k_earth_daymap.jpg',
     maps: [
       {
         name: 'Satellit', mercator: true, maxLevel: 8,
@@ -50,6 +52,8 @@ export const BODIES = [
   {
     id: 'moon', name: 'Mond', type: 'Mond', parent: 'earth', color: '#cfcfcf',
     radiusKm: 1737.4, gravity: 1.62, dayHours: 708.7, meanTempC: -20, moons: null,
+    // Vollständiges Grundbild (inkl. Pole) unter allen Kartenebenen – sofort sichtbar
+    mapFallback: '/textures/2k_moon.jpg',
     maps: [
       { name: 'LRO WAC', url: trekTiles('Moon', 'LRO_WAC_Mosaic_Global_303ppd_v02'), maxLevel: 8, credit: 'NASA Moon Trek – LRO WAC Mosaik' },
       { name: 'Kaguya (detailliert)', underlay: 0, url: trekTiles('Moon', 'Kaguya_TCortho_Mosaic_Global_4096ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – JAXA SELENE/Kaguya Terrain Camera' },
@@ -61,6 +65,8 @@ export const BODIES = [
     radiusKm: 3389.5, gravity: 3.7, dayHours: 24.7, meanTempC: -65, moons: 2,
     elements: [1.52371034, 0.0933941, 1.84969142, -4.55343205, -23.94362959, 49.55953891],
     rates: [0.00001847, 0.00007882, -0.00813131, 19140.30268499, 0.44441088, -0.29257343],
+    // Vollständiges Grundbild (inkl. Pole) unter allen Kartenebenen – sofort sichtbar
+    mapFallback: '/textures/2k_mars.jpg',
     maps: [
       { name: 'Farbe (Viking)', url: trekTiles('Mars', 'Mars_Viking_MDIM21_ClrMosaic_global_232m'), maxLevel: 7, credit: 'NASA Mars Trek – Viking MDIM 2.1 Farbmosaik' },
       { name: 'Relief (MOLA/HRSC)', url: trekTiles('Mars', 'Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw'), maxLevel: 8, credit: 'NASA Mars Trek – MGS MOLA + ESA Mars Express HRSC, 200 m' },

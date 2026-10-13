@@ -33,6 +33,13 @@ const OBJECTS = [
 // (Sternbedeckungen / Spitzer- & Herschel-Messungen; gerundet).
 const RADIUS_FALLBACK = { Eris: 1163, Haumea: 780, Makemake: 715, Gonggong: 615, Quaoar: 545, Sedna: 500, Orcus: 455 };
 
+// Achsen (km) aus Missionsdaten, wo die SBDB keine führt (gerundet)
+const EXTENT_FALLBACK = {
+  Haumea: [2322, 1704, 1026],
+  Itokawa: [0.535, 0.294, 0.209], Apophis: [0.45, 0.34, 0.30], Psyche: [278, 238, 171],
+  Eros: [34.4, 11.2, 11.2], 'Tschurjumow-Gerassimenko': [4.1, 3.3, 1.8], Halley: [15.3, 7.2, 7.2],
+};
+
 const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
 
 const out = [];
@@ -51,6 +58,8 @@ for (const [sstr, name, category, moons, description, color] of OBJECTS) {
     moons,
     description,
     radiusKm: phys.diameter ? num(phys.diameter) / 2 : RADIUS_FALLBACK[name] ?? null,
+    // Achsen des Körpers in km (falls vermessen), z. B. „964.4 x 964.2 x 891.8“
+    extentKm: phys.extent ? phys.extent.split(/\s*x\s*/).map(Number) : EXTENT_FALLBACK[name] ?? null,
     radiusSource: phys.diameter ? 'JPL SBDB' : 'Literaturwert',
     rotationHours: num(phys.rot_per),
     albedo: num(phys.albedo),
