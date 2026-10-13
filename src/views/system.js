@@ -11,6 +11,8 @@ import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
 import { createSun } from '../lib/sun.js';
+import { createAtmosphere } from '../lib/atmosphere.js';
+import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
 
 const loader = new THREE.TextureLoader();
@@ -100,6 +102,8 @@ export function createSystemView(container, { onSelect }) {
     (layer ? layers[layer] : scene).add(mesh);
     if (tex?.scale) mesh.scale.set(...tex.scale);
     if (tex?.clouds) mesh.add(createClouds(radius, tex.clouds));
+    const atmo = isSun ? null : createAtmosphere(body.id, radius);
+    if (atmo) mesh.add(atmo);
     if (body.ring) mesh.add(createRing(radius, tex?.ring));
     const labelCls = !layer || layer === 'dwarfs' ? 'body-label' : 'minor-label';
     const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body));
@@ -115,7 +119,11 @@ export function createSystemView(container, { onSelect }) {
     }
     const tail = body.type === 'Komet' ? createTail() : null;
     if (tail) layers.comets.add(tail);
-    bodies.set(body.id, { body, mesh, orbit, tail, minorLabel: labelCls === 'minor-label' ? label : null });
+    bodies.set(body.id, {
+      body, mesh, orbit, tail, minorLabel: labelCls === 'minor-label' ? label : null,
+      // Eigenrotation: Periode in Stunden (mit Vorzeichen) und zuletzt berechneter Winkel für die Anti-Strobe-Prüfung
+      spinHours: rotationPeriod(body), lastSpin: null,
+    });
   }
 
   // --- Gürtel & Zonen ----------------------------------------------------------
@@ -143,6 +151,16 @@ export function createSystemView(container, { onSelect }) {
 
   // --- Zustand & Aktualisierung --------------------------------------------------------
   let date = new Date();
+  // Für flüssige Rotation im Live-Modus (die Uhr meldet dort nur 1x pro Sekunde): simulierte Zeit zwischen
+  // zwei setDate-Aufrufen fortschreiben, solange die Uhr etwa in Echtzeit läuft.
+  let dateSetAt = performance.now();
+  let simRate = 0; // simulierte ms pro realer ms, aus den letzten beiden setDate-Aufrufen
+  const J2000_MS = Date.UTC(2000, 0, 1, 12, 0, 0);
+  function simMillis() {
+    const base = date.getTime();
+    const dtReal = Math.min(1500, performance.now() - dateSetAt);
+    return simRate > 0.9 && simRate < 1.1 ? base + dtReal * simRate : base;
+  }
   let blend = 0; // 0 = Lehrbuch, 1 = Real
   let blendTarget = 0;
   let selectedId = null;
@@ -237,15 +255,18 @@ export function createSystemView(container, { onSelect }) {
   renderer.setAnimationLoop(() => {
     if (!active) return;
     const now = performance.now() / 1000;
-    const dt = Math.min(0.1, now - (lastFrame ?? now));
     lastFrame = now;
     sun.tick(now);
-    // Eigenrotation (visuell verlangsamt; Richtung aus der Tageslänge, Venus rückläufig)
-    for (const { body, mesh } of bodies.values()) {
-      if (body.id === 'sun') continue;
-      const day = body.dayHours ?? body.rotationHours ?? 24;
-      const dir = body.id === 'venus' || body.id === 'uranus' ? -1 : 1;
-      mesh.rotation.y += dir * dt * Math.min(0.6, Math.max(0.02, 2.4 / day));
+    // Eigenrotation echt aus dem simulierten Datum: Winkel = 2π · (Zeit seit J2000 / Periode).
+    // Anti-Strobe: springt der Winkel zwischen zwei Bildern um > 0,35 rad (schneller Zeitraffer),
+    // bleibt der Körper einfach stehen, statt wild zu flackern.
+    const sinceJ2000 = simMillis() - J2000_MS;
+    for (const b of bodies.values()) {
+      if (!b.spinHours) continue;
+      const angle = (2 * Math.PI * sinceJ2000) / (Math.abs(b.spinHours) * 3600000) * Math.sign(b.spinHours);
+      const jump = b.lastSpin === null ? 0 : Math.abs(angle - b.lastSpin);
+      b.lastSpin = angle;
+      if (jump <= 0.35) b.mesh.rotation.y = angle % (2 * Math.PI);
     }
     if (blend !== blendTarget) {
       blend += Math.sign(blendTarget - blend) * 0.025;
@@ -281,7 +302,14 @@ export function createSystemView(container, { onSelect }) {
   update();
 
   return {
-    setDate(d) { date = d; update(); },
+    setDate(d) {
+      const nowMs = performance.now();
+      const dReal = nowMs - dateSetAt;
+      if (dReal > 0) simRate = (d.getTime() - date.getTime()) / dReal;
+      dateSetAt = nowMs;
+      date = d;
+      update();
+    },
     getDate: () => date,
     setRealMode(real) {
       blendTarget = real ? 1 : 0;
@@ -359,13 +387,13 @@ function createRing(radius, ringFile) {
   return ring;
 }
 
-// Wolkenschicht der Erde, dreht sich leicht schneller als die Oberfläche
+// Wolkenschicht der Erde: dreht mit der Erde mit (Kind-Mesh) plus sehr langsamer eigener Drift
 function createClouds(radius, file) {
   const clouds = new THREE.Mesh(
     new THREE.SphereGeometry(radius * 1.02, 64, 32),
     new THREE.MeshStandardMaterial({ alphaMap: loader.load(`/textures/${file}`), transparent: true, depthWrite: false })
   );
-  clouds.onBeforeRender = () => (clouds.rotation.y += 0.0004);
+  clouds.onBeforeRender = () => (clouds.rotation.y = performance.now() * 2e-6); // ~0,002 rad/s
   return clouds;
 }
 

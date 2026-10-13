@@ -1,8 +1,10 @@
 // Animierte Sonne: echte Sonnentextur, durch fBm-Rauschen animiert, mit Randverdunkelung
-// im Shader, dazu ein pulsierender Korona-Schein.
+// im Shader, dazu eine dynamische Korona (Billboard mit Flammen/Protuberanzen am Rand).
 import * as THREE from 'three';
 
 const vertex = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   varying vec3 vPos;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -14,10 +16,13 @@ const vertex = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     vView = normalize(-mv.xyz);
     gl_Position = projectionMatrix * mv;
+    #include <logdepthbuf_vertex>
   }
 `;
 
 const fragment = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
   uniform float uTime;
   uniform sampler2D uMap;
   varying vec2 vUv;
@@ -41,6 +46,7 @@ const fragment = /* glsl */ `
   }
 
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 p = normalize(vPos) * 3.2;
     float t = uTime * 0.04;
     // zwei Rauschschichten, gegeneinander verschoben → wabernde Granulation
@@ -64,6 +70,82 @@ const fragment = /* glsl */ `
   }
 `;
 
+// --- Korona: Billboard hinter der Sonne, Flammen radial nach außen strömend ---------------
+const coronaVertex = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  uniform float uSize;   // halbe Kantenlänge in Welteinheiten
+  uniform float uRadius; // Sonnenradius
+  varying vec2 vP;
+  void main() {
+    vP = position.xy;
+    vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    // Ebene um einen Sonnenradius nach hinten schieben, damit die Sonnenkugel sie per Tiefentest
+    // verdeckt; Größe mit der Perspektive nachführen, als läge sie in der Sonnenmitte.
+    float d = max(-mv.z, 0.001);
+    mv.xy += position.xy * uSize * (d + uRadius) / d;
+    mv.z -= uRadius;
+    gl_Position = projectionMatrix * mv;
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const coronaFragment = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform float uTime;
+  uniform float uSpan; // Ausdehnung des Billboards in Sonnenradien
+  varying vec2 vP;
+
+  float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+  float noise(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y),
+      f.z);
+  }
+  float fbm(vec3 p, int oct) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 4; i++) { if (i >= oct) break; v += a * noise(p); p *= 2.03; a *= 0.5; }
+    return v;
+  }
+
+  void main() {
+    float r = length(vP) * uSpan;            // Abstand in Sonnenradien
+    if (r < 0.9 || r > uSpan * 0.98) discard;
+    #include <logdepthbuf_fragment>
+    vec2 dir = vP / max(length(vP), 1e-4);   // Richtung statt Winkel → keine Naht
+    float h = r - 1.0;                       // Höhe über dem Sonnenrand
+    float t = uTime;
+
+    // Flammenlänge je Richtung: wandert langsam → mal hier, mal dort eine Protuberanz
+    float lenN = fbm(vec3(dir * 1.7, t * 0.05), 3);
+    float reach = 0.18 + 3.4 * pow(max(lenN - 0.22, 0.0), 1.5);
+    // Flammenzungen strömen nach außen (Zeit läuft gegen die Höhe)
+    float streak = fbm(vec3(dir * 7.0, h * 1.6 - t * 0.35), 4);
+    float tongues = smoothstep(0.30, 0.85, streak);
+    float flame = clamp(1.0 - h / reach, 0.0, 1.0);
+    flame = flame * flame * (0.35 + 1.1 * tongues);
+    flame *= smoothstep(-0.05, 0.04, h);
+
+    // weicher Grundschein (pulsiert leicht)
+    float pulse = 1.0 + 0.08 * sin(t * 0.8) + 0.05 * sin(t * 1.9 + dir.x * 3.0);
+    float glow = (0.62 * exp(-max(h, 0.0) * 2.6) + 0.2 * exp(-max(h, 0.0) * 0.7)) * pulse;
+
+    float inten = flame * 1.2 + glow;
+    inten *= 1.0 - smoothstep(uSpan * 0.5, uSpan * 0.97, r); // nach außen ausblenden
+
+    // heiß = gelb-weiß am Rand, kühler = orange-rot weiter draußen
+    float hot = clamp(inten * 0.6 - h * 0.3, 0.0, 1.0);
+    vec3 col = mix(vec3(1.0, 0.28, 0.04), vec3(1.0, 0.82, 0.38), hot);
+    col = mix(col, vec3(1.0, 0.95, 0.75), pow(hot, 3.0) * 0.35);
+    gl_FragColor = vec4(col, clamp(inten, 0.0, 1.0));
+    #include <colorspace_fragment>
+  }
+`;
+
 export function createSun(radius, map) {
   const uniforms = { uTime: { value: 0 }, uMap: { value: map } };
   const mesh = new THREE.Mesh(
@@ -71,29 +153,28 @@ export function createSun(radius, map) {
     new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment })
   );
 
-  // Korona: weicher, leicht pulsierender Schein
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  g.addColorStop(0, 'rgba(255,230,170,0.95)');
-  g.addColorStop(0.22, 'rgba(255,180,80,0.55)');
-  g.addColorStop(0.45, 'rgba(255,130,40,0.16)');
-  g.addColorStop(1, 'rgba(255,110,30,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
-  const corona = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: new THREE.CanvasTexture(canvas), depthWrite: false, blending: THREE.AdditiveBlending, transparent: true,
-  }));
-  corona.scale.setScalar(radius * 7);
+  // Korona: ein einziger Billboard-Quad (additiv), 6 Sonnenradien Kantenlänge je Seite
+  const span = 6;
+  const coronaUniforms = {
+    uTime: uniforms.uTime, uSpan: { value: span },
+    uSize: { value: radius * span }, uRadius: { value: radius },
+  };
+  const corona = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({
+      uniforms: coronaUniforms, vertexShader: coronaVertex, fragmentShader: coronaFragment,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    })
+  );
+  corona.frustumCulled = false; // Vertex-Shader verschiebt die Ecken weit über die Geometrie hinaus
+  corona.raycast = () => {};
   mesh.add(corona);
 
+  // Die Eigenrotation (mesh.rotation.y) setzt der Aufrufer aus dem simulierten Datum
   return {
     mesh,
     tick(seconds) {
       uniforms.uTime.value = seconds;
-      corona.scale.setScalar(radius * (7 + Math.sin(seconds * 0.8) * 0.25));
-      mesh.rotation.y = seconds * 0.01;
     },
   };
 }
