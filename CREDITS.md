@@ -23,6 +23,10 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | OpenTopoMap (tile.opentopomap.org) | Erdkarte „Topografie“ | Darstellung CC-BY-SA, Daten © OpenStreetMap-Mitwirkende & SRTM |
 | OpenStreetMap Nominatim (Reverse-Geocoding) | Ortsname im Lexikon | © OpenStreetMap-Mitwirkende, ODbL; max. 1 Anfrage/Klick |
 | Wikipedia (de) – Geosuche & Kurzauszüge | Lexikon-Artikel | Texte CC BY-SA 4.0, Link zum Originalartikel |
+| NASA Solar System Treks (trek.nasa.gov) – Mercury, Venus, Vesta, Ceres, Titan, Europa, Ganymed, Io, Kallisto, Enceladus, Mimas, Dione, Rhea, Tethys, Iapetus, Phoebe, Phobos, Ryugu, Bennu | Weitere Oberflächenkarten (40 Ebenen) | NASA/JPL-Caltech; Mosaike u. a. von MESSENGER, Magellan, Dawn, Cassini, Galileo, Voyager, Juno, DLR, ESA, JAXA |
+| NASA/JPL Solar System Dynamics – Planetary Satellite Mean Elements & Physical Parameters (ssd.jpl.nasa.gov/sats) | Bahnen und Daten von 459 Monden | NASA/JPL |
+| IAU WGCCRE 2015 (Archinal et al. 2018) | Rotationspole der Planeten | wissenschaftliche Veröffentlichung |
+| NASA Sun Fact Sheet; Kopparapu et al. 2013/2014; GRAVITY Collaboration 2019; Bennett & Bovy 2019; IERS ICRF3 | Sonnensystem-Panel, habitable Zone, Lage in der Milchstraße, Koordinatenkreuz | wissenschaftliche Veröffentlichungen / NASA |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
 
 ## Software

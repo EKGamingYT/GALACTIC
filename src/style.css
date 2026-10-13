@@ -243,3 +243,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .search input { width: 120px; }
   .search input:focus { width: 160px; }
 }
+
+/* --- Kartenauswahl ------------------------------------------------------------------ */
+.map-pick { display: flex; align-items: center; gap: 8px; padding: 2px 6px 2px 10px; color: var(--muted); font-size: 12px; }
+.map-pick select {
+  padding: 6px 10px; font: inherit; font-size: 14px; color: var(--text); color-scheme: dark;
+  background: var(--surface-strong); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.map-pick select:focus { outline: none; border-color: var(--accent); }

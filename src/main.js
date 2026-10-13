@@ -1,5 +1,6 @@
 import './style.css';
-import { BODIES, bodyById, mappedBodies } from './data/bodies.js';
+import { BODIES, bodyById } from './data/bodies.js';
+import { MAP_BODIES, mapBodyById, mapIdFor } from './data/mapcatalog.js';
 import { SOLAR_SYSTEM, HABITABLE_ZONE } from './data/solarsystem.js';
 import { SMALL_BODIES } from './views/system.js';
 import { moonBodies } from './views/moons.js';
@@ -126,7 +127,7 @@ function selectBody(body) {
     ${bodyDetails(body)}
     <div class="actions">
       ${body.elements || body.kepler || body.id === 'sun' || body.major ? `<button data-act="focus">Heranfliegen</button>` : ''}
-      ${body.maps ? `<a class="primary" href="#/body/${body.id}">Karte öffnen</a>` : ''}
+      ${mapIdFor(body) ? `<a class="primary" href="#/body/${mapIdFor(body)}">Karte öffnen</a>` : ''}
       ${children.filter((c) => c.maps).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
     </div>
     <p class="muted small">${body.isMoon
@@ -291,11 +292,15 @@ sInput.addEventListener('keydown', (e) => {
 });
 sInput.addEventListener('blur', () => setTimeout(() => (sList.hidden = true), 150));
 
-// Kartenauswahl (Erde / Mond / Mars …)
+// Kartenauswahl: gruppierte Liste aller Körper mit Oberflächenkarten
 const bodyTabs = document.createElement('div');
 bodyTabs.className = 'body-tabs';
-bodyTabs.innerHTML = mappedBodies()
-  .map((b) => `<a href="#/body/${b.id}" data-body="${b.id}">${b.name}</a>`).join('');
+const groups = [...new Set(MAP_BODIES.map((b) => b.group))];
+bodyTabs.innerHTML = `<label class="map-pick"><span>Karte</span><select aria-label="Himmelskörper wählen">${groups
+  .map((g) => `<optgroup label="${g}">${MAP_BODIES.filter((b) => b.group === g)
+    .map((b) => `<option value="${b.id}">${b.name}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
+const mapSelect = bodyTabs.querySelector('select');
+mapSelect.onchange = () => (location.hash = `#/body/${mapSelect.value}`);
 $('#view-body').before(bodyTabs);
 bodyTabs.after(layerBar);
 $('#view-body').after(mapStatus);
@@ -311,9 +316,9 @@ function route() {
   system.setActive(view === 'system');
 
   if (view === 'body') {
-    const body = bodyById(arg) || bodyById('earth');
+    const body = mapBodyById(arg) || mapBodyById('earth');
     globe.show(body);
-    bodyTabs.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.body === body.id));
+    mapSelect.value = body.id;
     $('#status').textContent = `Karte: ${body.name}`;
   } else {
     $('#status').textContent = view === 'sky' ? 'SPHEREx · Vorschau' : 'Sonnensystem';
