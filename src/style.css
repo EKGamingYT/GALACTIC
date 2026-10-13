@@ -267,3 +267,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .p9-label { color: rgba(255, 143, 177, 0.75) !important; }
 
 .nav a { white-space: nowrap; }
+
+.vc-toggle {
+  align-self: flex-start; padding: 2px 8px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px;
+}
+.vc-toggle:hover { color: var(--text); border-color: var(--accent); }
+.view-controls.collapsed { right: auto; }
+.view-controls.collapsed > :not(.vc-toggle) { display: none; }

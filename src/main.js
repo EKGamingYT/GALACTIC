@@ -203,6 +203,7 @@ clock.onChange(() => {
 const controls = document.createElement('div');
 controls.className = 'view-controls';
 controls.innerHTML = `
+  <button class="vc-toggle" aria-expanded="true" title="Steuerung ein-/ausklappen">Ansicht ▾</button>
   <div class="vc-group">
     <span class="vc-title">Modell</span>
     <div class="seg">
@@ -243,6 +244,15 @@ controls.innerHTML = `
   <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;
 $('#view-system').appendChild(controls);
 
+// Steuerung einklappbar (auf dem Handy standardmäßig eingeklappt)
+const vcToggle = controls.querySelector('.vc-toggle');
+const setCollapsed = (c) => {
+  controls.classList.toggle('collapsed', c);
+  vcToggle.setAttribute('aria-expanded', String(!c));
+  vcToggle.textContent = c ? 'Ansicht ▸' : 'Ansicht ▾';
+};
+vcToggle.onclick = () => setCollapsed(!controls.classList.contains('collapsed'));
+setCollapsed(window.matchMedia('(max-width: 720px)').matches);
 controls.querySelectorAll('[data-orbit]').forEach((b) => (b.onclick = () => {
   const real = b.dataset.orbit === 'real';
   system.setRealMode(real);

@@ -16,6 +16,7 @@ import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
 import { createSun } from '../lib/sun.js';
 import { createMoonSystems } from './moons.js';
+import { createSkybox } from '../lib/skybox.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
 import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
@@ -117,7 +118,11 @@ export function createSystemView(container, { onSelect }) {
   controls.minDistance = 0.3;
   controls.maxDistance = 600000;
 
-  scene.add(createStarfield());
+  // Echter Himmel (NASA SVS Deep Star Maps 2020, äquatorial). Orientierung geprüft: RA 0h in
+  // Bildmitte, nach links zunehmend – nur so liegen galaktisches Zentrum, Cygnus und Carina hell.
+  const sky = createSkybox('/textures/starmap_4k.jpg', { raSign: -1, raOffset: 0.5, brightness: 0.8 });
+  sky.scale.setScalar(1000);
+  scene.add(sky);
   scene.add(new THREE.AmbientLight(0xffffff, 0.1)); // schwach: Nachtseiten dunkel, aber nicht schwarz
   scene.add(new THREE.PointLight(0xfff2d0, 3, 0, 0));
 
@@ -615,6 +620,7 @@ export function createSystemView(container, { onSelect }) {
     }
     updateStarView();
     controls.update();
+    sky.position.copy(camera.position); // unendlich fern: wandert mit der Kamera
     composer.render();
     labels.render(scene, camera);
     if (now - lastDeclutter > 0.15) { lastDeclutter = now; declutter(); }
@@ -681,23 +687,6 @@ function makeLabel(text, className, y = 0, onClick, dotColor) {
   const obj = new CSS2DObject(el);
   obj.position.set(0, y, 0);
   return obj;
-}
-
-function createStarfield() {
-  const count = 8000;
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
-  const c = new THREE.Color();
-  for (let i = 0; i < count; i++) {
-    const v = new THREE.Vector3().randomDirection().multiplyScalar(400000 + Math.random() * 400000);
-    pos.set([v.x, v.y, v.z], i * 3);
-    c.setHSL(0.55 + Math.random() * 0.15, 0.4, 0.7 + Math.random() * 0.3);
-    col.set([c.r, c.g, c.b], i * 3);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return new THREE.Points(geo, new THREE.PointsMaterial({ size: 1.5, sizeAttenuation: false, vertexColors: true }));
 }
 
 // Kometenschweif: zeigt von der Sonne weg, wächst in Sonnennähe (< 5 AE)
