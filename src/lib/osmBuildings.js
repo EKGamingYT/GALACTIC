@@ -2,7 +2,7 @@
 // die Overpass API geladen, sobald die Kamera tief genug über der Erde ist.
 // Höhe aus den OSM-Tags `height` bzw. `building:levels` (sonst 10 m).
 import {
-  Cartesian3, Cartographic, Color, HeightReference, Math as CesiumMath, PolygonHierarchy,
+  Cartesian3, Cartographic, Color, DirectionalLight, HeightReference, Math as CesiumMath, PolygonHierarchy,
 } from 'cesium';
 
 const ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
@@ -16,7 +16,22 @@ function buildingHeight(tags = {}) {
   return Number.isFinite(levels) ? levels * 3.2 : 10;
 }
 
+// Farbe nach Höhe: niedrige Häuser warmes Hellgrau, Hochhäuser kühles Blaugrau
+function buildingColor(h) {
+  const t = Math.min(1, h / 80);
+  return Color.lerp(Color.fromCssColorString('#e9e4da'), Color.fromCssColorString('#8fa3c0'), t, new Color());
+}
+
 export function enableOsmBuildings(viewer, onStatus) {
+  // „Stirnlampe“: Licht kommt schräg von der Kamera → Gebäude sind immer
+  // plastisch schattiert, unabhängig von der echten Tageszeit
+  const light = new DirectionalLight({ direction: viewer.camera.directionWC, intensity: 2.2 });
+  viewer.scene.light = light;
+  const removeLight = viewer.scene.preRender.addEventListener(() => {
+    const d = Cartesian3.add(viewer.camera.directionWC, Cartesian3.multiplyByScalar(viewer.camera.rightWC, 0.6, new Cartesian3()), new Cartesian3());
+    light.direction = Cartesian3.normalize(d, d);
+  });
+
   const loaded = new Set();   // geladene Rasterzellen
   const seen = new Set();     // OSM-IDs bereits angelegter Gebäude
   let busy = false;
@@ -72,7 +87,7 @@ export function enableOsmBuildings(viewer, onStatus) {
               heightReference: HeightReference.RELATIVE_TO_GROUND,
               extrudedHeight: buildingHeight(el.tags),
               extrudedHeightReference: HeightReference.RELATIVE_TO_GROUND,
-              material: Color.fromCssColorString('#d8dde8').withAlpha(0.92),
+              material: buildingColor(buildingHeight(el.tags)),
               outline: false,
             },
           });
@@ -91,5 +106,5 @@ export function enableOsmBuildings(viewer, onStatus) {
     clearTimeout(timer);
     timer = setTimeout(update, 400);
   });
-  return () => { remove(); viewer.entities.removeAll(); };
+  return () => { remove(); removeLight(); viewer.entities.removeAll(); };
 }

@@ -7,6 +7,7 @@ import { createSystemView } from './views/system.js';
 import { createGlobeView } from './views/globe.js';
 import { createSkyView } from './views/sky.js';
 import { createTimebar } from './ui/timebar.js';
+import { placeName, nearbyArticles } from './lib/lexicon.js';
 
 const $ = (sel) => document.querySelector(sel);
 const panel = $('#panel');
@@ -85,8 +86,11 @@ function selectBody(body) {
   updatePanelLive();
 }
 
-function pickPoint(body, lat, lon) {
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+async function pickPoint(body, lat, lon) {
   panelBody = null;
+  const isEarth = body.id === 'earth';
   showPanel(`
     <p class="eyebrow">${body.name} · Punktabfrage</p>
     <h2 style="--accent:${body.color}">${lat.toFixed(3)}°, ${lon.toFixed(3)}°</h2>
@@ -94,8 +98,27 @@ function pickPoint(body, lat, lon) {
       <dt>Breite</dt><dd>${lat.toFixed(4)}°</dd>
       <dt>Länge</dt><dd>${lon.toFixed(4)}°</dd>
     </dl>
+    ${isEarth ? '<div class="lexicon"><p class="muted small">Lexikon wird geladen …</p></div>' : ''}
     <p class="muted small">Weitere Datenebenen für diesen Punkt (Höhe, Temperatur,
     Bodenzusammensetzung) folgen.</p>`);
+  if (!isEarth) return;
+
+  const box = panel.querySelector('.lexicon');
+  try {
+    const [place, articles] = await Promise.all([placeName(lat, lon), nearbyArticles(lat, lon)]);
+    if (!box.isConnected) return; // Panel inzwischen geschlossen/gewechselt
+    box.innerHTML = `
+      ${place ? `<p class="place">${esc(place)}</p>` : ''}
+      ${articles.map((a, i) => `
+        <div class="article">
+          <a href="${a.url}" target="_blank" rel="noopener">${esc(a.title)}</a>
+          <span class="muted small"> · ${a.distKm.toFixed(1)} km</span>
+          ${i === 0 && a.extract ? `<p class="small">${esc(a.extract)}</p>` : ''}
+        </div>`).join('') || '<p class="muted small">Keine Wikipedia-Artikel in der Nähe.</p>'}
+      <p class="muted small">Quellen: OpenStreetMap Nominatim · Wikipedia (CC BY-SA)</p>`;
+  } catch {
+    if (box.isConnected) box.innerHTML = '<p class="muted small">Lexikon gerade nicht erreichbar.</p>';
+  }
 }
 
 // --- Ansichten ---------------------------------------------------------------

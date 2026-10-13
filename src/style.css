@@ -62,6 +62,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transform: translateY(-6px);
 }
 .desc { margin: -4px 0 14px; color: #c9d3ea; font-size: 13px; }
+.lexicon { margin-bottom: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.lexicon .place { margin: 0 0 10px; font-size: 13px; }
+.lexicon .article { margin-bottom: 8px; }
+.lexicon .article a { color: var(--accent); font-weight: 500; }
+.lexicon .article p { margin: 4px 0 0; color: #c9d3ea; }
+.panel { max-height: calc(100vh - var(--topbar-h) - 32px); overflow-y: auto; }
 
 /* Segment-Umschalter */
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-strong); border: 1px solid var(--line); border-radius: 9px; }

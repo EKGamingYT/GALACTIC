@@ -13,9 +13,8 @@ Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kachel
 
 // Kachelquelle für eine Kartenebene (geographisches oder Web-Mercator-Raster)
 function makeProvider(layer, ellipsoid) {
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   return new UrlTemplateImageryProvider({
-    url: layer.daily ? layer.url.replace('{date}', yesterday) : layer.url,
+    url: layer.url,
     tilingScheme: layer.mercator
       ? new WebMercatorTilingScheme({ ellipsoid })
       : new GeographicTilingScheme({
@@ -39,7 +38,13 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   function setLayer(index) {
     if (!viewer) return;
     viewer.imageryLayers.removeAll();
-    viewer.imageryLayers.add(new ImageryLayer(makeProvider(currentBody.maps[index], ellipsoid)));
+    const layer = currentBody.maps[index];
+    // Lücken detaillierter Karten (nicht abgedeckte Gebiete) mit der vollständigen
+    // Grundkarte füllen, leicht abgedunkelt – statt schwarzer Flächen
+    if (layer.underlay !== undefined) {
+      viewer.imageryLayers.add(new ImageryLayer(makeProvider(currentBody.maps[layer.underlay], ellipsoid), { brightness: 0.7, saturation: 0.6 }));
+    }
+    viewer.imageryLayers.add(new ImageryLayer(makeProvider(layer, ellipsoid)));
     onLayers?.(currentBody, index);
   }
 
@@ -69,7 +74,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       contextOptions: { webgl: { preserveDrawingBuffer: import.meta.env.DEV } },
     });
     if (import.meta.env.DEV) window.__viewer = viewer; // nur lokales Testen
-    viewer.scene.globe.baseColor = Color.BLACK;
+    viewer.scene.globe.baseColor = Color.fromCssColorString('#1c2230'); // dezent statt schwarz
     viewer.scene.globe.showGroundAtmosphere = isEarth;
     viewer.camera.setView({ destination: Cartesian3.fromDegrees(0, 10, r * 3, ellipsoid) });
 

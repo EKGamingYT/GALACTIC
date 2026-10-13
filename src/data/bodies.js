@@ -32,18 +32,17 @@ export const BODIES = [
     rates: [0.00000562, -0.00004392, -0.01294668, 35999.37244981, 0.32327364, 0],
     maps: [
       {
-        // NASA GIBS: Blue Marble, EPSG:4326, 512-px-Kacheln; Ebene 0 = 288°-Kacheln ab (-180, 90)
-        name: 'Satellit', url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/500m/{z}/{y}/{x}.jpeg',
-        tileSize: 512, maxLevel: 7, tilingRect: [-180, -198, 396, 90], credit: 'NASA GIBS – Blue Marble',
-      },
-      {
-        name: 'Gestern (VIIRS)', mercator: true, maxLevel: 9, daily: true,
-        url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg',
-        credit: 'NASA GIBS – VIIRS/Suomi NPP, Aufnahme vom Vortag',
+        name: 'Satellit', mercator: true, maxLevel: 8,
+        url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
+        credit: 'NASA GIBS – Blue Marble',
       },
       {
         name: 'Straßen', mercator: true, maxLevel: 19, url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         credit: '© OpenStreetMap-Mitwirkende (ODbL)',
+      },
+      {
+        name: 'Topografie', mercator: true, maxLevel: 17, url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
+        credit: 'Kartendaten: © OpenStreetMap-Mitwirkende, SRTM | Darstellung: © OpenTopoMap (CC-BY-SA)',
       },
     ],
     children: ['moon'],
@@ -53,8 +52,8 @@ export const BODIES = [
     radiusKm: 1737.4, gravity: 1.62, dayHours: 708.7, meanTempC: -20, moons: null,
     maps: [
       { name: 'LRO WAC', url: trekTiles('Moon', 'LRO_WAC_Mosaic_Global_303ppd_v02'), maxLevel: 8, credit: 'NASA Moon Trek – LRO WAC Mosaik' },
-      { name: 'Kaguya (detailliert)', url: trekTiles('Moon', 'Kaguya_TCortho_Mosaic_Global_4096ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – JAXA SELENE/Kaguya Terrain Camera' },
-      { name: 'Relief (LOLA)', url: trekTiles('Moon', 'LRO_LOLAKaguya_ClrHillshade_60N60S_512ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – LRO LOLA + Kaguya, farbiges Höhenrelief (60° N–60° S)' },
+      { name: 'Kaguya (detailliert)', underlay: 0, url: trekTiles('Moon', 'Kaguya_TCortho_Mosaic_Global_4096ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – JAXA SELENE/Kaguya Terrain Camera' },
+      { name: 'Relief (LOLA)', underlay: 0, url: trekTiles('Moon', 'LRO_LOLAKaguya_ClrHillshade_60N60S_512ppd', 'png'), maxLevel: 10, credit: 'NASA Moon Trek – LRO LOLA + Kaguya, farbiges Höhenrelief (60° N–60° S)' },
     ],
   },
   {
@@ -65,7 +64,7 @@ export const BODIES = [
     maps: [
       { name: 'Farbe (Viking)', url: trekTiles('Mars', 'Mars_Viking_MDIM21_ClrMosaic_global_232m'), maxLevel: 7, credit: 'NASA Mars Trek – Viking MDIM 2.1 Farbmosaik' },
       { name: 'Relief (MOLA/HRSC)', url: trekTiles('Mars', 'Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw'), maxLevel: 8, credit: 'NASA Mars Trek – MGS MOLA + ESA Mars Express HRSC, 200 m' },
-      { name: 'Infrarot (THEMIS)', url: trekTiles('Mars', 'THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018', 'png'), maxLevel: 9, credit: 'NASA Mars Trek – Mars Odyssey THEMIS Tag-IR, 100 m (65° S–65° N)' },
+      { name: 'Infrarot (THEMIS)', underlay: 0, url: trekTiles('Mars', 'THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018', 'png'), maxLevel: 9, credit: 'NASA Mars Trek – Mars Odyssey THEMIS Tag-IR, 100 m (65° S–65° N)' },
     ],
   },
   {
