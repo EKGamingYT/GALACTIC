@@ -11,7 +11,6 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | NASA Planetary Fact Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet) | Physikalische Daten | NASA, gemeinfrei |
 | E. M. Standish, Keplerian Elements for Approximate Positions of the Major Planets (ssd.jpl.nasa.gov/planets/approx_pos.html) | Planetenbahnen | JPL/NASA |
 | NASA Solar System Exploration – Asteroidengürtel (~2,2–3,2 AE), Kuipergürtel (~30–50 AE), Jupiter-Trojaner (L4/L5) | Grobe Darstellung der Kleinkörper-Regionen (statistisch, keine Einzelobjekte) | NASA, gemeinfrei |
-| NASA GIBS – VIIRS/Suomi NPP Corrected Reflectance True Color | Erdkarte „Gestern“ (tagesaktuell) | NASA, frei nutzbar |
 | OpenStreetMap (tile.openstreetmap.org) | Erdkarte „Straßen“ | © OpenStreetMap-Mitwirkende, ODbL; Nutzung gemäß OSMF Tile Usage Policy |
 | NASA Moon Trek – JAXA SELENE/Kaguya TC Ortho-Mosaik; LRO LOLA + Kaguya Farbrelief | Mondkarten „Kaguya“, „Relief“ | NASA/JAXA, Bereitstellung über NASA Trek |
 | NASA Mars Trek – MGS MOLA + ESA Mars Express HRSC Farbrelief (200 m); Mars Odyssey THEMIS Tag-IR (100 m) | Marskarten „Relief“, „Infrarot“ | NASA/ESA/DLR/ASU, Bereitstellung über NASA Trek |
@@ -21,6 +20,9 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | NASA New Horizons (NASA/JHUAPL/SwRI) via USGS Astrogeology – Pluto-Globalmosaik | Oberfläche Pluto | gemeinfrei |
 | AWS Terrain Tiles / Mapzen Terrarium (s3.amazonaws.com/elevation-tiles-prod) – Quellen u. a. SRTM, GMTED2010, ETOPO1, NED | 3D-Gelände der Erde | offener AWS-Datensatz, Namensnennung der Quelldaten |
 | OpenStreetMap über Overpass API (overpass-api.de) | 3D-Gebäude (Grundrisse + Höhen-Tags) | © OpenStreetMap-Mitwirkende, ODbL |
+| OpenTopoMap (tile.opentopomap.org) | Erdkarte „Topografie“ | Darstellung CC-BY-SA, Daten © OpenStreetMap-Mitwirkende & SRTM |
+| OpenStreetMap Nominatim (Reverse-Geocoding) | Ortsname im Lexikon | © OpenStreetMap-Mitwirkende, ODbL; max. 1 Anfrage/Klick |
+| Wikipedia (de) – Geosuche & Kurzauszüge | Lexikon-Artikel | Texte CC BY-SA 4.0, Link zum Originalartikel |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
 
 ## Software
