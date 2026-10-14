@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import DATA from '../data/nearbystars.json';
 import { OBLIQUITY_DEG } from '../data/solarsystem.js';
+import { SYSTEMS } from '../data/systems.js';
 
 const DEG = Math.PI / 180;
 const AU_PER_LY = 63241.077;
@@ -83,6 +84,18 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     items.set(body.id, { s, body, dir, node, sprite, sphere, label, sys, planets, extent: 0 });
   }
 
+  // Mehrfachsysteme: aus der Ferne ein gemeinsamer Systemname am Hauptstern statt vieler Einzelnamen
+  for (const sysInfo of SYSTEMS) {
+    if (sysInfo.members.length < 2) continue;
+    const primary = items.get(sysInfo.primaryId);
+    if (!primary) continue;
+    const lbl = makeLabel(sysInfo.name, 'star-label star-major system-name', 1.2, sysInfo);
+    lbl.element.dataset.count = `${sysInfo.members.length}★`;
+    primary.node.add(lbl);
+    primary.systemLabel = lbl;
+    for (const m of sysInfo.members) { const it = items.get(m.id); if (it) it.inMulti = sysInfo.primaryId; }
+  }
+
   // Position abhängig von Lehrbuch/Real; Planetenbahnen im selben Nahmaßstab wie unser System
   function update(date, blend) {
     const days = (date.getTime() - Date.UTC(2000, 0, 1, 12)) / 864e5;
@@ -113,7 +126,14 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       // Aus der Ferne nur bekannte Sterne beschriften, die übrigen erst beim Heranfliegen
       const major = !!it.s.description;
       const close = dist < it.node.position.length() * 0.35;
-      it.label.visible = (starView && major) || close || near || selectedId === it.body.id;
+      const sel = selectedId === it.body.id;
+      if (it.inMulti) {
+        // Mitglieder eines Mehrfachsystems: aus der Ferne nur der Systemname, nah dran die Einzelsterne
+        it.label.visible = close || near || sel;
+        if (it.systemLabel) it.systemLabel.visible = starView && !close && !near && !sel;
+      } else {
+        it.label.visible = (starView && major) || close || near || sel;
+      }
       it.sphere.visible = dist < it.extent * 40;
     }
   }

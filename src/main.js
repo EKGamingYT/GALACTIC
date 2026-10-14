@@ -5,6 +5,8 @@ import { SOLAR_SYSTEM, HABITABLE_ZONE } from './data/solarsystem.js';
 import { SMALL_BODIES } from './views/system.js';
 import { moonBodies } from './views/moons.js';
 import { STARS, starBody } from './views/stars.js';
+import { SYSTEMS } from './data/systems.js';
+import { createSystemPicker } from './ui/systemPicker.js';
 import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
@@ -148,8 +150,45 @@ function showSystemPanel() {
     Quellen: NASA Sun Fact Sheet, IAU 2015, GRAVITY Collaboration 2019, IERS (ICRF3).</p>`);
 }
 
+// Panel eines Nachbar-Sternsystems: Sterne (mit Leuchtkraft & habitabler Zone) und Planeten
+function showStarSystemPanel(sys) {
+  panelBody = null;
+  system.select(sys.primaryId);
+  const hzPlanets = sys.planets.filter((p) => p.inHz);
+  const lum = (m) => (m.L == null ? '–' : `${m.estimated ? '≈ ' : ''}${fmt(m.L, ' L☉', m.L < 0.01 ? 5 : 3)}`);
+  showPanel(`
+    <p class="eyebrow">${sys.type}</p>
+    <h2 style="--accent:${sys.color}">${sys.name}</h2>
+    ${sys.description ? `<p class="desc">${sys.description}</p>` : ''}
+    <dl class="facts facts-wide">
+      <dt>Entfernung</dt><dd>${fmt(sys.distanceLy, ' Lichtjahre', 2)}</dd>
+      <dt>Sterne</dt><dd>${sys.members.length}</dd>
+      <dt>Bekannte Planeten</dt><dd>${sys.planets.length}</dd>
+      <dt>In der habitablen Zone</dt><dd>${hzPlanets.length ? hzPlanets.map((p) => p.name).join(', ') : sys.planets.length ? 'keiner bekannt' : '–'}</dd>
+    </dl>
+    <p class="eyebrow">Sterne</p>
+    <ul class="member-list">${sys.members.map((m) => `
+      <li><button data-star="${m.id}"><i style="background:${m.colorHex || '#fff'}"></i>
+        <span><strong>${m.name}</strong><small>${m.spectralType ?? 'Typ unbekannt'} · Leuchtkraft ${lum(m)}${m.hz
+          ? ` · HZ ${fmt(m.hz[0], '', m.hz[0] < 0.1 ? 3 : 2)}–${fmt(m.hz[1], ' AE', m.hz[1] < 0.1 ? 3 : 2)}` : ''}</small></span>
+      </button></li>`).join('')}</ul>
+    ${sys.planets.length ? `<p class="eyebrow">Planeten</p>
+    <ul class="planet-list">${sys.planets.map((p) => `<li><strong>${p.name}</strong>${p.inHz ? ' <span class="sp-badge">HZ</span>' : ''}
+      <small>um ${p.host}${p.aAu ? ' · ' + fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${p.discoveryYear ? ' · ' + p.discoveryYear : ''}</small></li>`).join('')}</ul>` : ''}
+    <div class="actions"><button data-act="focus">Heranfliegen</button></div>
+    <p class="muted small">Quellen: CDS SIMBAD, NASA Exoplanet Archive. Leuchtkraft mit „≈“ geschätzt aus Helligkeit,
+    Parallaxe und Spektraltyp; habitable Zone (konservativ) nach Kopparapu et al. – Näherung.</p>`);
+  panel.querySelector('[data-act="focus"]').onclick = () => system.focus(sys.primaryId);
+  panel.querySelectorAll('[data-star]').forEach((b) => (b.onclick = () => {
+    const s = STARS.find((x) => x.id === b.dataset.star);
+    selectBody(starBody(s));
+    system.focus(s.id);
+  }));
+}
+
 function selectBody(body) {
   if (body.id === SOLAR_SYSTEM.id) return showSystemPanel();
+  if (body.isSystem) return showStarSystemPanel(body);
   panelBody = body;
   system.select(body.id);
   const children = (body.children || []).map(bodyById);
@@ -307,12 +346,25 @@ controls.querySelectorAll('[data-layer]').forEach((c) => (c.onchange = () => sys
 // --- Suche über alle Objekte --------------------------------------------------------------
 const MOON_BODIES = moonBodies();
 const STAR_BODIES = STARS.map(starBody);
-const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES, ...STAR_BODIES, ...MOON_BODIES];
+const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES, ...SYSTEMS, ...STAR_BODIES, ...MOON_BODIES];
 const search = document.createElement('div');
 search.className = 'search';
 search.innerHTML = `<input type="search" placeholder="Objekt suchen …" aria-label="Objekt suchen" />
   <ul class="search-results" role="listbox" hidden></ul>`;
 $('.topbar .nav').after(search);
+const sysBtn = document.createElement('button');
+sysBtn.className = 'sys-btn';
+sysBtn.innerHTML = '<span class="sys-ico"></span>Sternsysteme';
+search.before(sysBtn);
+createSystemPicker(sysBtn, {
+  solarSystem: SOLAR_SYSTEM,
+  onPick: (s) => {
+    if (location.hash !== '#/system') location.hash = '#/system';
+    if (s.own) { selectBody(SOLAR_SYSTEM); system.frame(52); return; }
+    selectBody(s);
+    system.focus(s.primaryId);
+  },
+});
 const sInput = search.querySelector('input');
 const sList = search.querySelector('ul');
 const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -325,6 +377,7 @@ function goTo(body) {
   selectBody(body);
   if (body.id === SOLAR_SYSTEM.id) system.frame(1500000);
   else if (body.isMoon && !body.major) system.focus(body.parent); // kleine Monde: zum Planeten fliegen
+  else if (body.isSystem) system.focus(body.primaryId);
   else system.focus(body.id);
 }
 sInput.addEventListener('input', () => {
