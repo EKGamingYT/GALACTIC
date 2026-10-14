@@ -46,5 +46,7 @@ export function globeFitDistance(scene, radius, fill) {
   fill ??= aspect < 1 ? 0.84 : 0.74; // Hochformat: Globus füllt die Breite stärker
   const tanY = Math.tan(f.fovy / 2);
   const half = Math.atan(Math.min(tanY, tanY * aspect)) * fill;
-  return radius / Math.sin(half);
+  const d = radius / Math.sin(half);
+  // Unsichtbarer/0 px großer Container (Hintergrund-Tab, noch nicht gelayoutet): sinnvoller Ersatzwert
+  return Number.isFinite(d) && d > radius ? d : radius * 3;
 }

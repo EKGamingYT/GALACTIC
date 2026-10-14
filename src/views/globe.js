@@ -5,7 +5,7 @@ import {
   Viewer, Globe, Ellipsoid, ImageryLayer, UrlTemplateImageryProvider, GeographicTilingScheme, GridImageryProvider,
   ScreenSpaceEventHandler, ScreenSpaceEventType, SceneMode, Math as CesiumMath,
   Credit, Color, Cartesian3, Ion, Rectangle, WebMercatorTilingScheme, SingleTileImageryProvider, DirectionalLight,
-  Primitive, GeometryInstance, EllipsoidGeometry, MaterialAppearance, Material,
+  Primitive, GeometryInstance, EllipsoidGeometry, MaterialAppearance, Material, SkyBox,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import '../map.css';
@@ -45,6 +45,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let ellipsoid = null;
   let currentBody = null;
   let gridLayer = null;
+  let polarCaps = null; // Materialien der Erd-Polkappen (Farbe je Kartenebene)
   let ui = null;
   let names = null;
   let nav = null;
@@ -79,6 +80,13 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       viewer.imageryLayers.add(new ImageryLayer(makeProvider(currentBody.maps[layer.underlay], ellipsoid), { brightness: 0.7, saturation: 0.6 }));
     }
     viewer.imageryLayers.add(new ImageryLayer(makeProvider(layer, ellipsoid)));
+    // Polkappen (Erde) passend zur Kartenart einfärben: Eis beim Satellitenbild,
+    // Meer/Land-Farbe der Straßen- bzw. Topokarte (OSM endet bei ±85°)
+    if (polarCaps) {
+      const [north, south] = layer.capColors ?? ['#e9eef4', '#e9eef4'];
+      polarCaps[0].uniforms.color = Color.fromCssColorString(north);
+      polarCaps[1].uniforms.color = Color.fromCssColorString(south);
+    }
     applyGrid();
     ui?.setLayer(layer);
     onLayers?.(currentBody, index);
@@ -89,7 +97,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     disposers = [];
     nav?.dispose();
     names?.dispose();
-    nav = names = ui = gridLayer = null;
+    nav = names = ui = gridLayer = polarCaps = null;
     viewer?.destroy();
     viewer = null;
     container.innerHTML = '';
@@ -121,6 +129,11 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
       infoBox: false, selectionIndicator: false,
       skyAtmosphere: isEarth ? undefined : false,
+      // Echter Sternenhimmel hinter jedem Globus: Würfelseiten aus der NASA-SVS-Sternenkarte
+      // (scripts/make-skybox.py, Ausrichtung gegen Cesiums Tycho-Katalog geprüft)
+      skyBox: new SkyBox({ sources: Object.fromEntries(
+        [['positiveX', 'px'], ['negativeX', 'mx'], ['positiveY', 'py'], ['negativeY', 'my'], ['positiveZ', 'pz'], ['negativeZ', 'mz']]
+          .map(([k, f]) => [k, `/textures/skybox/${f}.jpg`])) }),
       // nur in der Entwicklung: erlaubt Screenshots des WebGL-Canvas
       contextOptions: { webgl: { preserveDrawingBuffer: import.meta.env.DEV } },
     });
@@ -130,6 +143,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     const { camera } = scene;
     const { globe, canvas } = scene;
     globe.baseColor = Color.fromCssColorString('#1c2230'); // dezent statt schwarz
+    // Schärfere Kacheln (v. a. Straßen-/Topokarte mit Schrift) und größerer Kachel-Cache
+    globe.maximumScreenSpaceError = 1.5;
+    globe.tileCacheSize = 400;
     globe.showGroundAtmosphere = isEarth;
     if (!isEarth) { if (scene.sun) scene.sun.show = false; if (scene.moon) scene.moon.show = false; }
 
@@ -261,7 +277,10 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       globe.depthTestAgainstTerrain = true;
       // Die Geländedaten (Web-Mercator) enden bei ±85° Breite → Loch an den Polen.
       // Zwei eisfarbene Polkappen (85°–90°) direkt auf der Oberfläche schließen es.
+      polarCaps = [];
       for (const [minCone, maxCone] of [[0, 5.2], [174.8, 180]]) {
+        const capMaterial = Material.fromType('Color', { color: Color.fromCssColorString('#e9eef4') });
+        polarCaps.push(capMaterial);
         scene.primitives.add(new Primitive({
           geometryInstances: new GeometryInstance({
             geometry: new EllipsoidGeometry({
@@ -272,7 +291,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
             }),
           }),
           appearance: new MaterialAppearance({
-            material: Material.fromType('Color', { color: Color.fromCssColorString('#e9eef4') }),
+            material: capMaterial,
             materialSupport: MaterialAppearance.MaterialSupport.BASIC,
           }),
           asynchronous: false,

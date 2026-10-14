@@ -41,10 +41,12 @@ export const BODIES = [
       {
         name: 'Straßen', mercator: true, maxLevel: 19, url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         credit: '© OpenStreetMap-Mitwirkende (ODbL)',
+        capColors: ['#aad3df', '#f2efe9'], // OSM-Meeresblau (Arktis) / Landfarbe (Antarktis)
       },
       {
         name: 'Topografie', mercator: true, maxLevel: 17, url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
         credit: 'Kartendaten: © OpenStreetMap-Mitwirkende, SRTM | Darstellung: © OpenTopoMap (CC-BY-SA)',
+        capColors: ['#a5c7e3', '#f5f4f0'],
       },
     ],
     children: ['moon'],
