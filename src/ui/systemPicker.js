@@ -22,10 +22,10 @@ export function createSystemPicker(button, { solarSystem, onPick }) {
         <h2>Sonnenumgebung</h2>
         <p class="muted small">${all.length} Systeme bis 20 Lichtjahre · nach Entfernung</p>
       </div>
-      <button class="close" aria-label="Schließen">×</button>
+      <button class="close" aria-label="Schließen" title="Schließen (Esc)">×</button>
     </header>
-    <input type="search" placeholder="System filtern …" aria-label="Systeme filtern" />
-    <div class="seg sp-filter" role="tablist">
+    <input type="search" placeholder="System filtern …" aria-label="Systeme filtern" autocomplete="off" spellcheck="false" />
+    <div class="seg sp-filter" role="group" aria-label="Filter">
       <button data-f="all" class="on">Alle</button>
       <button data-f="planets">Mit Planeten</button>
       <button data-f="multi">Mehrfach</button>
@@ -47,9 +47,10 @@ export function createSystemPicker(button, { solarSystem, onPick }) {
         <span class="sp-dots">${s.members.slice(0, 4).map((m) => `<i style="background:${m.colorHex || '#fff'}"></i>`).join('')}</span>
         <span class="sp-main">
           <strong>${s.name}</strong>
-          <small>${fmtLy(s.distanceLy)} · ${s.members.length} ${s.members.length === 1 ? 'Stern' : 'Sterne'}${s.planets.length ? ` · ${s.planets.length} ${s.planets.length === 1 ? 'Planet' : 'Planeten'}` : ''}</small>
+          <small>${s.members.length} ${s.members.length === 1 ? 'Stern' : 'Sterne'}${s.planets.length ? ` · ${s.planets.length} ${s.planets.length === 1 ? 'Planet' : 'Planeten'}` : ''}</small>
         </span>
         ${s.hzCount ? `<span class="sp-badge" title="Planet(en) in der habitablen Zone">HZ</span>` : ''}
+        <span class="sp-dist">${fmtLy(s.distanceLy)}</span>
       </button></li>`).join('') || '<li class="muted small sp-empty">Kein System gefunden</li>';
     list.querySelectorAll('[data-id]').forEach((b) => (b.onclick = () => {
       current = b.dataset.id;
@@ -62,10 +63,13 @@ export function createSystemPicker(button, { solarSystem, onPick }) {
   function toggle(open = el.hidden) {
     el.hidden = !open;
     button.classList.toggle('on', open);
+    button.setAttribute('aria-expanded', String(open));
     if (open) { render(); input.focus({ preventScroll: true }); }
   }
 
   input.addEventListener('input', render);
+  // Esc schließt die Seitenleiste (auch aus dem Filterfeld heraus)
+  el.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.hidden) { e.stopPropagation(); toggle(false); button.focus({ preventScroll: true }); } });
   el.querySelectorAll('[data-f]').forEach((b) => (b.onclick = () => {
     filter = b.dataset.f;
     el.querySelectorAll('[data-f]').forEach((x) => x.classList.toggle('on', x === b));

@@ -147,7 +147,7 @@ function updatePanelLive() {
 }
 
 function showPanel(html) {
-  panel.innerHTML = `<button class="close" aria-label="Schließen">×</button>${html}`;
+  panel.innerHTML = `<button class="close" aria-label="Schließen" title="Schließen (Esc)">×</button><div class="panel-body">${html}</div>`;
   panel.classList.remove('hidden');
   panel.querySelector('.close').onclick = () => {
     panel.classList.add('hidden');
@@ -336,8 +336,8 @@ const globe = createGlobeView($('#view-body'), {
   onStatus: (text) => { mapStatus.textContent = text; mapStatus.hidden = !text; },
   // Ebenen-Umschalter der aktuellen Karte (z. B. Farbe / Relief / Infrarot)
   onLayers: (body, active) => {
-    layerBar.innerHTML = `<div class="seg">${body.maps
-      .map((m, i) => `<button data-i="${i}" class="${i === active ? 'on' : ''}">${m.name}</button>`).join('')}</div>`;
+    layerBar.innerHTML = `<div class="seg" role="group" aria-label="Kartenebene">${body.maps
+      .map((m, i) => `<button data-i="${i}" class="${i === active ? 'on' : ''}" aria-pressed="${i === active}">${m.name}</button>`).join('')}</div>`;
     layerBar.querySelectorAll('button').forEach((b) => (b.onclick = () => globe.setLayer(Number(b.dataset.i))));
   },
 });
@@ -353,7 +353,7 @@ clock.onChange(() => {
 const controls = document.createElement('div');
 controls.className = 'view-controls';
 controls.innerHTML = `
-  <button class="vc-toggle" aria-expanded="true" title="Steuerung ein-/ausklappen">Ansicht ▾</button>
+  <button class="vc-toggle" aria-expanded="true" title="Steuerung ein-/ausklappen"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Ansicht</span><i class="chev" aria-hidden="true"></i></button>
   <div class="vc-group">
     <span class="vc-title">Modell</span>
     <div class="seg">
@@ -382,6 +382,7 @@ controls.innerHTML = `
   </div>
   <div class="vc-group">
     <span class="vc-title">Ebenen</span>
+    <div class="vc-chips">
     <label><input type="checkbox" data-layer="hz" checked /> Habitable Zone</label>
     <label><input type="checkbox" data-layer="belts" checked /> Gürtel</label>
     <label><input type="checkbox" data-layer="zones" checked /> Zonen</label>
@@ -391,6 +392,7 @@ controls.innerHTML = `
     <label><input type="checkbox" data-layer="oort" checked /> Oortsche Wolke</label>
     <label><input type="checkbox" data-layer="planet9" checked /> Planet Neun?</label>
     <label><input type="checkbox" data-layer="ref" /> Koordinatenkreuz</label>
+    </div>
   </div>
   <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;
 $('#view-system').appendChild(controls);
@@ -400,7 +402,6 @@ const vcToggle = controls.querySelector('.vc-toggle');
 const setCollapsed = (c) => {
   controls.classList.toggle('collapsed', c);
   vcToggle.setAttribute('aria-expanded', String(!c));
-  vcToggle.textContent = c ? 'Ansicht ▸' : 'Ansicht ▾';
 };
 vcToggle.onclick = () => setCollapsed(!controls.classList.contains('collapsed'));
 setCollapsed(window.matchMedia('(max-width: 720px)').matches);
@@ -425,12 +426,15 @@ const STAR_BODIES = STARS.map(starBody);
 const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES, ...SYSTEMS, ...STAR_BODIES, ...MOON_BODIES];
 const search = document.createElement('div');
 search.className = 'search';
-search.innerHTML = `<input type="search" placeholder="Objekt suchen …" aria-label="Objekt suchen" />
+search.innerHTML = `<input type="search" placeholder="Objekt suchen …" aria-label="Objekt suchen" autocomplete="off" spellcheck="false" />
   <ul class="search-results" role="listbox" hidden></ul>`;
 $('.topbar .nav').after(search);
 const sysBtn = document.createElement('button');
 sysBtn.className = 'sys-btn';
-sysBtn.innerHTML = '<span class="sys-ico"></span>Sternsysteme';
+sysBtn.innerHTML = '<span class="sys-ico"></span><span class="sys-label">Sternsysteme</span>';
+sysBtn.title = 'Sternsysteme bis 20 Lichtjahre';
+sysBtn.setAttribute('aria-label', 'Sternsysteme');
+sysBtn.setAttribute('aria-expanded', 'false');
 search.before(sysBtn);
 createSystemPicker(sysBtn, {
   solarSystem: SOLAR_SYSTEM,
@@ -474,14 +478,16 @@ sInput.addEventListener('blur', () => setTimeout(() => (sList.hidden = true), 15
 // Kartenauswahl: gruppierte Liste aller Körper mit Oberflächenkarten
 const bodyTabs = document.createElement('div');
 bodyTabs.className = 'body-tabs';
+bodyTabs.setAttribute('role', 'toolbar');
+bodyTabs.setAttribute('aria-label', 'Karte und Kartenebenen');
 const groups = [...new Set(MAP_BODIES.map((b) => b.group))];
-bodyTabs.innerHTML = `<label class="map-pick"><span>Karte</span><select aria-label="Himmelskörper wählen">${groups
+bodyTabs.innerHTML = `<label class="map-pick"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M3.4 12h17.2M12 3.4c3.4 3.2 3.4 13.8 0 17.2M12 3.4c-3.4 3.2-3.4 13.8 0 17.2"/></svg><span>Karte</span><select aria-label="Himmelskörper wählen">${groups
   .map((g) => `<optgroup label="${g}">${MAP_BODIES.filter((b) => b.group === g)
     .map((b) => `<option value="${b.id}">${b.name}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
 const mapSelect = bodyTabs.querySelector('select');
 mapSelect.onchange = () => (location.hash = `#/body/${mapSelect.value}`);
 $('#view-body').before(bodyTabs);
-bodyTabs.after(layerBar);
+bodyTabs.append(layerBar); // Körperwahl + Ebenen als eine kompakte Leiste
 $('#view-body').after(mapStatus);
 
 // Tastatur: H = Überblick, Esc = Panel schließen (nicht während der Eingabe in Suchfeldern)
@@ -530,3 +536,4 @@ function route() {
 window.addEventListener('hashchange', route);
 if (!location.hash) location.hash = '#/system';
 route();
+window.dispatchEvent(new Event('galactic:ready')); // Startbildschirm ausblenden (index.html)

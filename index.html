@@ -2,25 +2,124 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#04060d" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="G.A.L.A.C.T.I.C. – interaktiver Weltraum-Atlas: Sonnensystem, Planetenkarten und Nachbarsterne." />
     <title>G.A.L.A.C.T.I.C. – Atlas</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2304060d'/%3E%3Ccircle cx='16' cy='16' r='7' fill='%236ea8ff'/%3E%3Cellipse cx='16' cy='16' rx='13' ry='4.6' transform='rotate(-22 16 16)' fill='none' stroke='%23b98cff' stroke-width='1.5'/%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Inter:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <!-- Kritisches CSS: Startbildschirm steht sofort, noch bevor style.css (per JS) geladen ist -->
+    <style>
+      html, body { margin: 0; background: #04060d; }
+      .boot {
+        position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+        background:
+          radial-gradient(1.2px 1.2px at 12% 22%, #fff9, transparent 60%),
+          radial-gradient(1px 1px at 78% 14%, #fff8, transparent 60%),
+          radial-gradient(1.4px 1.4px at 64% 72%, #cfe0ffcc, transparent 60%),
+          radial-gradient(1px 1px at 28% 81%, #fff7, transparent 60%),
+          radial-gradient(1px 1px at 90% 58%, #fff7, transparent 60%),
+          radial-gradient(1.2px 1.2px at 44% 9%, #fff8, transparent 60%),
+          radial-gradient(1px 1px at 6% 62%, #fff6, transparent 60%),
+          radial-gradient(ellipse at 50% 42%, #0e1a38 0%, #070c1b 55%, #04060d 100%);
+        color: #e8eefc; font: 14px/1.5 Inter, system-ui, sans-serif;
+        transition: opacity 0.7s ease, visibility 0s 0.7s;
+      }
+      .boot.done { opacity: 0; visibility: hidden; pointer-events: none; }
+      .boot-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 0 24px; }
+      .boot-mark { width: 84px; height: 84px; filter: drop-shadow(0 0 22px rgba(110, 168, 255, 0.55)); }
+      .boot-ring { transform-origin: 32px 32px; animation: boot-spin 2.6s linear infinite; }
+      .boot-name {
+        margin-top: 6px; padding-left: 0.2em; font: 700 clamp(18px, 4.6vw, 26px)/1.1 Orbitron, system-ui, sans-serif; letter-spacing: 0.2em;
+        background: linear-gradient(90deg, #fff, #bcd3ff 60%, #d6bfff); -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .boot-sub { padding-left: 0.3em; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: #8a97b5; }
+      .boot-bar { width: 168px; height: 2px; margin-top: 6px; overflow: hidden; border-radius: 2px; background: rgba(130, 170, 255, 0.16); }
+      .boot-bar i { display: block; width: 40%; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #6ea8ff, #b98cff); animation: boot-run 1.3s ease-in-out infinite; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+      @keyframes boot-run { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      @media (prefers-reduced-motion: reduce) {
+        .boot { transition-duration: 0.01s; }
+        .boot-ring, .boot-bar i { animation: none; }
+        .boot-bar i { width: 100%; }
+      }
+    </style>
   </head>
   <body>
+    <div class="boot" id="boot" role="status" aria-live="polite">
+      <div class="boot-inner">
+        <svg class="boot-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <radialGradient id="boot-g" cx="35%" cy="32%" r="75%">
+              <stop offset="0" stop-color="#fff" />
+              <stop offset="0.38" stop-color="#6ea8ff" />
+              <stop offset="1" stop-color="#b98cff" />
+            </radialGradient>
+            <linearGradient id="boot-r" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#6ea8ff" />
+              <stop offset="1" stop-color="#b98cff" />
+            </linearGradient>
+            <clipPath id="boot-front"><rect x="0" y="32" width="64" height="32" /></clipPath>
+          </defs>
+          <circle cx="32" cy="32" r="29.5" fill="none" stroke="rgba(130,170,255,.16)" stroke-width="1" />
+          <g class="boot-ring"><circle cx="32" cy="2.5" r="2.4" fill="#fff" /></g>
+          <ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="1.8" opacity="0.5" />
+          <circle cx="32" cy="32" r="12.5" fill="url(#boot-g)" />
+          <g clip-path="url(#boot-front)"><ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="2" /></g>
+        </svg>
+        <div class="boot-name">G.A.L.A.C.T.I.C.</div>
+        <div class="boot-sub">Atlas wird gestartet</div>
+        <div class="boot-bar"><i></i></div>
+      </div>
+    </div>
+
     <header class="topbar">
-      <a class="brand" href="#/system" title="Zum Sonnensystem">
-        <span class="brand-mark"></span>
-        <span class="brand-name">G.A.L.A.C.T.I.C.</span>
+      <a class="brand" href="#/system" title="Zum Sonnensystem" aria-label="G.A.L.A.C.T.I.C. – zum Sonnensystem">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <radialGradient id="bm-g" cx="35%" cy="32%" r="75%">
+              <stop offset="0" stop-color="#fff" />
+              <stop offset="0.38" stop-color="#6ea8ff" />
+              <stop offset="1" stop-color="#b98cff" />
+            </radialGradient>
+            <linearGradient id="bm-r" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#6ea8ff" />
+              <stop offset="1" stop-color="#b98cff" />
+            </linearGradient>
+            <clipPath id="bm-front"><rect x="0" y="16" width="32" height="16" /></clipPath>
+          </defs>
+          <ellipse cx="16" cy="16" rx="14" ry="5" transform="rotate(-22 16 16)" fill="none" stroke="url(#bm-r)" stroke-width="1.4" opacity="0.5" />
+          <circle cx="16" cy="16" r="7" fill="url(#bm-g)" />
+          <g clip-path="url(#bm-front)"><ellipse cx="16" cy="16" rx="14" ry="5" transform="rotate(-22 16 16)" fill="none" stroke="url(#bm-r)" stroke-width="1.5" /></g>
+          <circle cx="27.4" cy="9.6" r="1.5" fill="#fff" />
+        </svg>
+        <span class="brand-text">
+          <span class="brand-name">G<b>.</b>A<b>.</b>L<b>.</b>A<b>.</b>C<b>.</b>T<b>.</b>I<b>.</b>C<b>.</b></span>
+          <span class="brand-sub">Weltraum-Atlas</span>
+        </span>
       </a>
-      <nav class="nav">
-        <a href="#/system" data-view="system">Sonnensystem</a>
-        <a href="#/body/earth" data-view="body">Planetenkarten</a>
-        <a href="#/sky" data-view="sky">Himmel · SPHEREx</a>
+      <nav class="nav" aria-label="Ansichten">
+        <a href="#/system" data-view="system" title="Sonnensystem">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="8.6" /><circle cx="18.1" cy="5.9" r="1.5" fill="currentColor" stroke="none" /></svg>
+          <span>Sonnensystem</span>
+        </a>
+        <a href="#/body/earth" data-view="body" title="Planetenkarten">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" /><path d="M3.4 12h17.2M12 3.4c3.4 3.2 3.4 13.8 0 17.2M12 3.4c-3.4 3.2-3.4 13.8 0 17.2" /></svg>
+          <span>Planetenkarten</span>
+        </a>
+        <a href="#/sky" data-view="sky" title="Himmel · SPHEREx">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3.5l1.9 5.6 5.6 1.9-5.6 1.9L11 18.5l-1.9-5.6L3.5 11l5.6-1.9z" /><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" fill="currentColor" stroke="none" /></svg>
+          <span>Himmel · SPHEREx</span>
+        </a>
       </nav>
       <div class="status" id="status"></div>
     </header>
@@ -31,8 +130,29 @@
       <section id="view-sky" class="view"></section>
     </main>
 
-    <aside id="panel" class="panel hidden"></aside>
+    <aside id="panel" class="panel hidden" aria-label="Details"></aside>
 
     <script type="module" src="/src/main.js"></script>
+    <script>
+      // Startbildschirm ausblenden, sobald die App läuft (mind. 0,8 s sichtbar, spätestens nach 8 s)
+      (() => {
+        const boot = document.getElementById('boot');
+        if (!boot) return;
+        const t0 = performance.now();
+        let done = false;
+        const hide = () => {
+          if (done) return;
+          done = true;
+          setTimeout(() => {
+            boot.classList.add('done');
+            setTimeout(() => boot.remove(), 900);
+          }, Math.max(0, 800 - (performance.now() - t0)));
+        };
+        // „galactic:ready“ sendet main.js, sobald die Ansichten stehen – Texturen dürfen danach nachladen
+        window.addEventListener('galactic:ready', () => requestAnimationFrame(() => requestAnimationFrame(hide)));
+        window.addEventListener('load', hide);
+        setTimeout(hide, 8000);
+      })();
+    </script>
   </body>
 </html>
