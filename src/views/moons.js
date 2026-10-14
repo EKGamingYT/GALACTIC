@@ -12,6 +12,7 @@ import { PLANET_MAPS } from '../data/planetmaps.js';
 import { trekTexture } from '../lib/trekTexture.js';
 
 const DEG = Math.PI / 180;
+const MOON_TEXTURES = new Set(['triton', 'charon', 'miranda', 'ariel', 'umbriel', 'titania', 'oberon', 'deimos']);
 const STEPS = 128;
 export const MOON_LIST = MOONS.moons;
 
@@ -87,6 +88,9 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
       item.mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), mat);
       // Echte Oberfläche aus den NASA-Trek-Karten (wird beim ersten Einblenden geladen)
       if (PLANET_MAPS[m.id]) item.trek = PLANET_MAPS[m.id][0];
+      // Monde ohne Trek-Karte: gemeinfreie Globalmosaike (Voyager 2, New Horizons, Viking; USGS) –
+      // Voyager sah bei den Uranusmonden nur die Südhalbkugel, der Norden ist dort dunkel
+      else if (MOON_TEXTURES.has(m.id)) { mat.map = loadTex(`moons/${m.id}.jpg`); mat.bumpMap = mat.map; mat.bumpScale = 0.4; mat.color.set(0xffffff); }
       item.mesh.userData.body = toBody(m);
       sys.group.add(item.mesh);
       const lbl = makeLabel(m.name, 'minor-label moon-label', r + 0.25, item.mesh.userData.body);
@@ -109,7 +113,7 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
   for (const [parent, sys] of systems) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sys.minor.length * 3), 3));
-    sys.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xb9c2d0, size: 2, sizeAttenuation: false }));
+    sys.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xb9c2d0, size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0.6 }));
     sys.group.add(sys.points);
     sys.extent = Math.max(sys.extent, sceneRadius(parent) * 4);
   }

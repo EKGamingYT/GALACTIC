@@ -4,6 +4,7 @@ import { MAP_BODIES, mapBodyById, mapIdFor } from './data/mapcatalog.js';
 import { SOLAR_SYSTEM, HABITABLE_ZONE } from './data/solarsystem.js';
 import { SMALL_BODIES } from './views/system.js';
 import { moonBodies } from './views/moons.js';
+import { STARS, starBody } from './views/stars.js';
 import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
@@ -37,7 +38,40 @@ function moonDetails(m) {
     </dl>`;
 }
 
+function starDetails(s) {
+  const members = STARS.filter((x) => x.system === s.system && x.id !== s.id).map((x) => x.name);
+  const planets = s.planets || [];
+  return `
+    <dl class="facts">
+      <dt>Entfernung</dt><dd>${fmt(s.distanceLy, ' Lichtjahre', 2)}</dd>
+      <dt>Spektraltyp</dt><dd>${s.spectralType ?? '–'}</dd>
+      ${s.teffK ? `<dt>Temperatur</dt><dd>${fmt(s.teffK, ' K', 0)}</dd>` : ''}
+      ${s.massSun ? `<dt>Masse</dt><dd>${fmt(s.massSun, ' Sonnenmassen', 3)}</dd>` : ''}
+      ${s.radiusSun ? `<dt>Radius</dt><dd>${fmt(s.radiusSun, ' Sonnenradien', 3)}</dd>` : ''}
+      ${s.vmag != null ? `<dt>Scheinbare Helligkeit</dt><dd>${fmt(s.vmag, ' mag', 2)}</dd>` : ''}
+      ${members.length ? `<dt>Im System mit</dt><dd>${members.join(', ')}</dd>` : ''}
+      <dt>Bekannte Planeten</dt><dd>${planets.length}</dd>
+    </dl>
+    ${planets.length ? `<ul class="planet-list">${planets.map((p) => `<li><strong>${p.name}</strong>
+      <small>${p.aAu ? fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${p.discoveryYear ? ' · entdeckt ' + p.discoveryYear : ''}</small></li>`).join('')}</ul>` : ''}`;
+}
+
+function exoDetails(p) {
+  return `
+    <dl class="facts">
+      <dt>Stern</dt><dd>${p.host}</dd>
+      ${p.aAu ? `<dt>Abstand zum Stern</dt><dd>${fmt(p.aAu, ' AE', 4)}</dd>` : ''}
+      ${p.periodDays ? `<dt>Umlaufzeit</dt><dd>${fmt(p.periodDays, ' Tage', 2)}</dd>` : ''}
+      ${p.e != null ? `<dt>Exzentrizität</dt><dd>${fmt(p.e, '', 3)}</dd>` : ''}
+      ${p.radiusEarth ? `<dt>Radius</dt><dd>${fmt(p.radiusEarth, ' Erdradien', 2)}</dd>` : ''}
+      ${p.massEarth ? `<dt>Masse</dt><dd>${fmt(p.massEarth, ' Erdmassen', 2)}</dd>` : ''}
+      ${p.discoveryYear ? `<dt>Entdeckt</dt><dd>${p.discoveryYear}${p.method ? ' · ' + p.method : ''}</dd>` : ''}
+    </dl>`;
+}
+
 function bodyDetails(body) {
+  if (body.isStar) return starDetails(body);
+  if (body.isExoplanet) return exoDetails(body);
   if (body.isMoon) return moonDetails(body);
   return `
     <dl class="facts">
@@ -126,11 +160,13 @@ function selectBody(body) {
     ${TEXTURES[body.id]?.artistic ? '<p class="muted small">Oberfläche: künstlerische Darstellung – es gibt noch keine Nahaufnahmen.</p>' : ''}
     ${bodyDetails(body)}
     <div class="actions">
-      ${body.elements || body.kepler || body.id === 'sun' || body.major ? `<button data-act="focus">Heranfliegen</button>` : ''}
+      ${body.elements || body.kepler || body.id === 'sun' || body.major || body.isStar || body.isExoplanet ? `<button data-act="focus">Heranfliegen</button>` : ''}
       ${mapIdFor(body) ? `<a class="primary" href="#/body/${mapIdFor(body)}">Karte öffnen</a>` : ''}
       ${children.filter((c) => c.maps).map((c) => `<a href="#/body/${c.id}">${c.name}-Karte</a>`).join('')}
     </div>
-    <p class="muted small">${body.isMoon
+    <p class="muted small">${body.isStar || body.isExoplanet
+      ? 'Quellen: CDS SIMBAD (Entfernung aus der Parallaxe), NASA Exoplanet Archive. Abstände in der Ansicht logarithmisch, Bahnlage der Exoplaneten schematisch.'
+      : body.isMoon
       ? 'Quelle: NASA/JPL Solar System Dynamics – mittlere Bahnelemente und physikalische Parameter der Monde. Abstände in der Ansicht logarithmisch gestaucht.'
       : body.kepler
       ? `Quelle: JPL Small-Body Database (${body.fullname}). Bahn als Zweikörper-Näherung – bei Kometen über Jahrzehnte ungenau.`
@@ -270,7 +306,8 @@ controls.querySelectorAll('[data-layer]').forEach((c) => (c.onchange = () => sys
 
 // --- Suche über alle Objekte --------------------------------------------------------------
 const MOON_BODIES = moonBodies();
-const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES, ...MOON_BODIES];
+const STAR_BODIES = STARS.map(starBody);
+const searchItems = () => [SOLAR_SYSTEM, ...BODIES, ...SMALL_BODIES, ...STAR_BODIES, ...MOON_BODIES];
 const search = document.createElement('div');
 search.className = 'search';
 search.innerHTML = `<input type="search" placeholder="Objekt suchen …" aria-label="Objekt suchen" />

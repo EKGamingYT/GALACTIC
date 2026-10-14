@@ -228,7 +228,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* --- Sternansicht & Koordinatenkreuz ----------------------------------------------- */
 .system-label {
   pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  transform: translateY(-34px); padding: 6px 14px; text-align: center;
+  padding: 6px 14px; text-align: center;
   background: rgba(8, 12, 24, 0.6); border: 1px solid rgba(255, 204, 85, 0.45); border-radius: 12px;
 }
 .system-label strong { font-family: Orbitron, sans-serif; font-size: 14px; letter-spacing: 0.1em; color: #ffe2a0; }
@@ -257,7 +257,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .status .hud-k { color: var(--accent); margin-left: 6px; }
 .status small { color: var(--muted); }
 .system-label {
-  background: none !important; border: 0 !important; padding: 0 !important; transform: translateY(18px) !important;
+  background: none !important; border: 0 !important; padding: 0 !important; margin-top: 42px; /* kein transform: den setzt CSS2D für die Position */
   opacity: 0.85;
 }
 .system-label strong { font-size: 11px !important; letter-spacing: 0.22em !important; color: #ffe2a0; text-shadow: 0 0 8px rgba(0,0,0,0.9); }
@@ -275,3 +275,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .vc-toggle:hover { color: var(--text); border-color: var(--accent); }
 .view-controls.collapsed { right: auto; }
 .view-controls.collapsed > :not(.vc-toggle) { display: none; }
+
+/* --- Nachbarsterne ------------------------------------------------------------------ */
+.star-label {
+  pointer-events: auto; cursor: pointer; font-size: 10px; letter-spacing: 0.04em; color: rgba(225, 232, 250, 0.7);
+  white-space: nowrap; transform: translateY(-10px); text-shadow: 0 0 6px #000;
+}
+.star-label.star-major { font-size: 11px; color: #f3f6ff; }
+.star-label:hover { color: #fff; }
+.planet-list { margin: -6px 0 14px; padding: 0; list-style: none; }
+.planet-list li { padding: 5px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.planet-list small { display: block; color: var(--muted); }

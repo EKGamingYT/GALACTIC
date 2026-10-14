@@ -27,6 +27,11 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | NASA/JPL Solar System Dynamics – Planetary Satellite Mean Elements & Physical Parameters (ssd.jpl.nasa.gov/sats) | Bahnen und Daten von 459 Monden | NASA/JPL |
 | IAU WGCCRE 2015 (Archinal et al. 2018) | Rotationspole der Planeten | wissenschaftliche Veröffentlichung |
 | NASA Sun Fact Sheet; Kopparapu et al. 2013/2014; GRAVITY Collaboration 2019; Bennett & Bovy 2019; IERS ICRF3 | Sonnensystem-Panel, habitable Zone, Lage in der Milchstraße, Koordinatenkreuz | wissenschaftliche Veröffentlichungen / NASA |
+| NASA Goddard SVS – Deep Star Maps 2020 (svs.gsfc.nasa.gov/4851), Gaia DR2: ESA/Gaia/DPAC | Echter Sternenhimmel im Hintergrund | NASA (frei); Gaia-Daten ESA/Gaia/DPAC (CC BY-SA 3.0 IGO) – Credit siehe public/textures/SOURCES.md |
+| USGS Astrogeology / NASA – Voyager-2-, New-Horizons-, Viking-Globalmosaike (Triton, Charon, Miranda, Ariel, Umbriel, Titania, Oberon, Deimos) | Mondoberflächen | gemeinfrei (USGS/NASA), Details in public/textures/SOURCES.md |
+| CDS SIMBAD (simbad.cds.unistra.fr) | Nachbarsterne ≤ 20 Lj: Positionen, Parallaxen, Spektraltypen | CDS, Strasbourg (frei für wissenschaftliche Nutzung, Zitierhinweis) |
+| NASA Exoplanet Archive (exoplanetarchive.ipac.caltech.edu) | Exoplaneten der Nachbarsterne | NASA/Caltech-IPAC |
+| Brown & Batygin 2021 (AJ 162, 219) | Hypothetische Bahn von Planet Neun | wissenschaftliche Veröffentlichung |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
 
 ## Software
