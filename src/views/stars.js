@@ -81,7 +81,13 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       sys.add(orbit, mesh);
       return { p, orbit, mesh };
     });
-    items.set(body.id, { s, body, dir, node, sprite, sphere, label, sys, planets, extent: 0 });
+    // Habitable Zone als grünes Band (wie beim Sonnensystem), Radien aus der Leuchtkraft
+    const hz = SYSTEMS.find((x) => x.systemId === s.system)?.members.find((m) => m.id === s.id)?.hz ?? null;
+    const hzRing = hz ? new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({
+      color: 0x3ddc84, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
+    })) : null;
+    if (hzRing) { hzRing.rotation.x = -Math.PI / 2; sys.add(hzRing); }
+    items.set(body.id, { s, body, dir, node, sprite, sphere, label, sys, planets, hz, hzRing, extent: 0 });
   }
 
   // Mehrfachsysteme: aus der Ferne ein gemeinsamer Systemname am Hauptstern statt vieler Einzelnamen
@@ -97,7 +103,16 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
   }
 
   // Position abhängig von Lehrbuch/Real; Planetenbahnen im selben Nahmaßstab wie unser System
+  let ringBlend = null;
   function update(date, blend) {
+    if (ringBlend !== blend) {
+      ringBlend = blend;
+      for (const it of items.values()) {
+        if (!it.hzRing) continue;
+        it.hzRing.geometry.dispose();
+        it.hzRing.geometry = new THREE.RingGeometry(nearDistance(it.hz[0], blend), nearDistance(it.hz[1], blend), 96);
+      }
+    }
     const days = (date.getTime() - Date.UTC(2000, 0, 1, 12)) / 864e5;
     for (const it of items.values()) {
       it.node.position.copy(it.dir).multiplyScalar(sceneDistance(it.s.distanceLy * AU_PER_LY, blend));
@@ -110,7 +125,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
         const ang = p.periodDays ? (2 * Math.PI * days) / p.periodDays : 0;
         mesh.position.set(Math.cos(ang) * d, 0, Math.sin(ang) * d);
       }
-      it.extent = Math.max(extent, 4);
+      it.extent = Math.max(extent, it.hz ? nearDistance(it.hz[1], blend) : 0, 4);
     }
   }
 

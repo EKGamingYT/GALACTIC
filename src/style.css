@@ -358,3 +358,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Weicher Übergang Sonnensystem ↔ Sternansicht: Beschriftungen blenden ein statt zu springen */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 #view-system .labels > * { animation: fade-in 0.6s ease; } /* läuft bei jedem Wiedereinblenden (display) */
+.moon-host { margin: 6px 0 4px; font-size: 12px; font-weight: 600; color: var(--text); }
+.moon-host small { color: var(--muted); font-weight: 400; }
+.star-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 6px 0 6px; padding: 6px 0 0; font: inherit;
+  color: var(--text); background: none; border: 0; border-top: 1px solid var(--line); text-align: left;
+}
+.star-head i { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.star-head:hover strong { color: var(--accent); }
+.star-facts { margin-bottom: 10px; font-size: 13px; }

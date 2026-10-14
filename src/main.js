@@ -25,6 +25,33 @@ const fmt = (n, unit = '', digits) =>
     ? '–'
     : `${n.toLocaleString('de-DE', digits !== undefined ? { maximumFractionDigits: digits } : {})}${unit}`;
 
+// Monde eines Körpers (große zuerst, nach Abstand)
+const moonsOf = (parentId) => MOON_BODIES.filter((m) => m.parent === parentId)
+  .sort((a, b) => (b.major - a.major) || (a.aKm - b.aKm));
+
+// Chips der großen Monde + Zahl der kleinen; Klick fliegt zum Mond
+function moonChips(parentId, max = 12) {
+  const all = moonsOf(parentId);
+  if (!all.length) return '';
+  const big = all.filter((m) => m.major).slice(0, max);
+  const rest = all.length - big.length;
+  return `<div class="chips">${big.map((m) => `<button data-moon="${m.id}"><i style="background:${m.color}"></i>${m.name}</button>`).join('')}
+    ${rest > 0 ? `<button data-moon-rest="${parentId}" title="Zum Mondsystem fliegen – kleine Monde als Punkte, einzeln über die Suche">+ ${rest} kleinere</button>` : ''}</div>`;
+}
+function wireMoonChips() {
+  panel.querySelectorAll('[data-moon]').forEach((b) => (b.onclick = () => {
+    const m = MOON_BODIES.find((x) => x.id === b.dataset.moon);
+    selectBody(m);
+    system.focus(m.id);
+  }));
+  // „+ N kleinere“: zum Mutterkörper fliegen – das Mondsystem zeigt die kleinen Monde als Punkte
+  panel.querySelectorAll('[data-moon-rest]').forEach((b) => (b.onclick = () => system.focus(b.dataset.moonRest)));
+}
+
+// Gleichgewichtstemperatur eines Planeten: 278,6 K · L^¼ · a^−½ · (1 − A)^¼ (Albedo 0,3 angenommen)
+const equilibriumK = (L, aAu) => (L && aAu ? 278.6 * Math.pow(L, 0.25) / Math.sqrt(aAu) * Math.pow(0.7, 0.25) : null);
+const STAR_L = new Map(SYSTEMS.flatMap((s) => s.members.map((m) => [m.name, m.L])));
+
 function moonDetails(m) {
   const FRAME = { ecliptic: 'Ekliptik', laplace: 'Laplace-Ebene', equatorial: 'Äquator des Planeten' };
   return `
@@ -37,7 +64,8 @@ function moonDetails(m) {
       <dt>Bahnneigung</dt><dd>${fmt(m.iDeg, '°', 1)} <small>(${FRAME[m.frameCode] ?? m.frame})</small></dd>
       ${m.densityGcm3 ? `<dt>Dichte</dt><dd>${fmt(m.densityGcm3, ' g/cm³', 2)}</dd>` : ''}
       ${m.albedo ? `<dt>Albedo</dt><dd>${fmt(m.albedo, '', 2)}</dd>` : ''}
-    </dl>`;
+    </dl>
+    ${m.schematic ? '<p class="muted small">Werte aus der Fachliteratur (gerundet); Bahnlage im Atlas schematisch.</p>' : ''}`;
 }
 
 function starDetails(s) {
@@ -68,7 +96,11 @@ function exoDetails(p) {
       ${p.radiusEarth ? `<dt>Radius</dt><dd>${fmt(p.radiusEarth, ' Erdradien', 2)}</dd>` : ''}
       ${p.massEarth ? `<dt>Masse</dt><dd>${fmt(p.massEarth, ' Erdmassen', 2)}</dd>` : ''}
       ${p.discoveryYear ? `<dt>Entdeckt</dt><dd>${p.discoveryYear}${p.method ? ' · ' + p.method : ''}</dd>` : ''}
-    </dl>`;
+      ${equilibriumK(STAR_L.get(p.host), p.aAu) ? `<dt>Temperatur (geschätzt)</dt><dd>≈ ${fmt(equilibriumK(STAR_L.get(p.host), p.aAu), ' K', 0)} <small>(${fmt(equilibriumK(STAR_L.get(p.host), p.aAu) - 273.15, ' °C', 0)})</small></dd>` : ''}
+      <dt>Monde</dt><dd>keine bekannt</dd>
+    </dl>
+    <p class="muted small">Temperatur = Gleichgewichtstemperatur ohne Treibhauseffekt (Albedo 0,3 angenommen).
+    Monde um Exoplaneten (Exomonde) sind bisher nirgends sicher nachgewiesen.</p>`;
 }
 
 function bodyDetails(body) {
@@ -157,6 +189,12 @@ function showSystemPanel() {
       <span><strong>${p.b.name}${p.inHz ? ' <span class="sp-badge">HZ</span>' : ''}</strong>
       <small>${fmt(p.a, ' AE', 2)} · Umlauf ${fmt(p.years, '', p.years < 2 ? 2 : 1)} ${Math.abs(p.years - 1) < 0.01 ? 'Jahr' : 'Jahre'} · ${fmt(p.b.radiusKm, ' km')} · ${fmt(p.b.moons)} ${p.b.moons === 1 ? 'Mond' : 'Monde'} · jetzt ${fmt(p.r, ' AE', 2)}</small></span>
     </button></li>`).join('')}</ul>
+    <p class="eyebrow">Monde · ${fmt(MOON_BODIES.length)} im Atlas</p>
+    ${['earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'eris', 'haumea', 'makemake', 'gonggong', 'quaoar', 'orcus', 'didymos']
+      .filter((id) => moonsOf(id).length).map((id) => {
+        const host = BODIES.find((b) => b.id === id) ?? SMALL_BODIES.find((b) => b.id === id);
+        return `<p class="moon-host">${host.name} <small>· ${moonsOf(id).length}</small></p>${moonChips(id, 8)}`;
+      }).join('')}
     <p class="eyebrow">Zwergplaneten</p>
     <div class="chips">${dwarfs.map((d) => `<button data-go="${d.id}"><i style="background:${d.color}"></i>${d.name}</button>`).join('')}</div>
     <p class="eyebrow">Daten der Sonne</p>
@@ -165,6 +203,7 @@ function showSystemPanel() {
     <dl class="facts facts-wide">${SOLAR_SYSTEM.galaxy.map(row).join('')}</dl>
     <p class="muted small">Habitable Zone (konservativ) nach Kopparapu et al. (2013/14) – grünes Band in der Ansicht.
     Quellen: NASA Planetary &amp; Sun Fact Sheets, IAU 2015, GRAVITY Collaboration 2019, IERS (ICRF3).</p>`);
+  wireMoonChips();
   panel.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => {
     const id = b.dataset.go;
     const body = BODIES.find((x) => x.id === id) ?? SMALL_BODIES.find((x) => x.id === id);
@@ -191,14 +230,23 @@ function showStarSystemPanel(sys) {
       <dt>In der habitablen Zone</dt><dd>${hzPlanets.length ? hzPlanets.map((p) => p.name).join(', ') : sys.planets.length ? 'keiner bekannt' : '–'}</dd>
     </dl>
     <p class="eyebrow">Sterne</p>
-    <ul class="member-list">${sys.members.map((m) => `
-      <li><button data-star="${m.id}"><i style="background:${m.colorHex || '#fff'}"></i>
-        <span><strong>${m.name}</strong><small>${m.spectralType ?? 'Typ unbekannt'} · Leuchtkraft ${lum(m)}${m.hz
-          ? ` · HZ ${fmt(m.hz[0], '', m.hz[0] < 0.1 ? 3 : 2)}–${fmt(m.hz[1], ' AE', m.hz[1] < 0.1 ? 3 : 2)}` : ''}</small></span>
-      </button></li>`).join('')}</ul>
+    ${sys.members.map((m) => `
+      <button class="star-head" data-star="${m.id}"><i style="background:${m.colorHex || '#fff'}"></i><strong>${m.name}</strong></button>
+      <dl class="facts facts-wide star-facts">
+        <dt>Spektraltyp</dt><dd>${m.spectralType ?? '–'}</dd>
+        ${m.teffK ? `<dt>Oberflächentemperatur</dt><dd>${fmt(m.teffK, ' K', 0)}</dd>` : ''}
+        ${m.massSun ? `<dt>Masse</dt><dd>${fmt(m.massSun, ' M☉', 3)}</dd>` : ''}
+        ${m.radiusSun ? `<dt>Radius</dt><dd>${fmt(m.radiusSun, ' R☉', 3)} <small>(${fmt(m.radiusSun * 695700, ' km', 0)})</small></dd>` : ''}
+        <dt>Leuchtkraft</dt><dd>${lum(m)}</dd>
+        ${m.vmag != null ? `<dt>Scheinbare Helligkeit</dt><dd>${fmt(m.vmag, ' mag', 2)}</dd>` : ''}
+        <dt>Habitable Zone</dt><dd>${m.hz ? `${fmt(m.hz[0], '', m.hz[0] < 0.1 ? 3 : 2)}–${fmt(m.hz[1], ' AE', m.hz[1] < 0.1 ? 3 : 2)}` : 'unbekannt'}</dd>
+        <dt>Planeten</dt><dd>${(m.planets || []).length}</dd>
+      </dl>`).join('')}
     ${sys.planets.length ? `<p class="eyebrow">Planeten</p>
     <ul class="planet-list">${sys.planets.map((p) => `<li><strong>${p.name}</strong>${p.inHz ? ' <span class="sp-badge">HZ</span>' : ''}
-      <small>um ${p.host}${p.aAu ? ' · ' + fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${p.discoveryYear ? ' · ' + p.discoveryYear : ''}</small></li>`).join('')}</ul>` : ''}
+      <small>um ${p.host}${p.aAu ? ' · ' + fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : ''}${p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${equilibriumK(STAR_L.get(p.host), p.aAu) ? ' · ≈ ' + fmt(equilibriumK(STAR_L.get(p.host), p.aAu) - 273.15, ' °C', 0) : ''}${p.discoveryYear ? ' · ' + p.discoveryYear : ''}${p.method ? ' (' + p.method + ')' : ''}</small></li>`).join('')}</ul>` : ''}
+    <p class="eyebrow">Monde</p>
+    <p class="muted small">Keine bekannt – Monde um Exoplaneten (Exomonde) sind bisher nirgends sicher nachgewiesen.</p>
     <div class="actions"><button data-act="focus">Heranfliegen</button></div>
     <p class="muted small">Quellen: CDS SIMBAD, NASA Exoplanet Archive. Leuchtkraft mit „≈“ geschätzt aus Helligkeit,
     Parallaxe und Spektraltyp; habitable Zone (konservativ) nach Kopparapu et al. – Näherung.</p>`);
@@ -222,6 +270,8 @@ function selectBody(body) {
     ${body.description ? `<p class="desc">${body.description}</p>` : ''}
     ${TEXTURES[body.id]?.artistic ? '<p class="muted small">Oberfläche: künstlerische Darstellung – es gibt noch keine Nahaufnahmen.</p>' : ''}
     ${bodyDetails(body)}
+    ${!body.isMoon && !body.isStar && !body.isExoplanet && moonsOf(body.id).length
+      ? `<p class="eyebrow">Monde (${moonsOf(body.id).length} im Atlas)</p>${moonChips(body.id)}` : ''}
     <div class="actions">
       ${body.elements || body.kepler || body.id === 'sun' || body.major || body.isStar || body.isExoplanet ? `<button data-act="focus">Heranfliegen</button>` : ''}
       ${mapIdFor(body) ? `<a class="primary" href="#/body/${mapIdFor(body)}">Karte öffnen</a>` : ''}
@@ -235,6 +285,7 @@ function selectBody(body) {
       ? `Quelle: JPL Small-Body Database (${body.fullname}). Bahn als Zweikörper-Näherung – bei Kometen über Jahrzehnte ungenau.`
       : 'Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)'}</p>`);
   panel.querySelector('[data-act="focus"]')?.addEventListener('click', () => system.focus(body.id));
+  wireMoonChips();
   updatePanelLive();
 }
 

@@ -15,11 +15,24 @@ function bcFor(spectralType) {
   return BC[m[0]];
 }
 
+// Bolometrische Korrektur aus der Temperatur (grobe Stützstellen, linear interpoliert) –
+// genauer als nach Spektralklasse, v. a. für heiße Weiße Zwerge und kühle Rote Zwerge
+const BC_T = [[2700, -4.8], [2800, -4.4], [3050, -3.8], [3200, -2.6], [3500, -1.6], [4000, -0.9], [5000, -0.3], [6000, -0.05], [8000, -0.1],
+  [10000, -0.4], [15000, -1.3], [20000, -2.0], [25000, -2.5], [30000, -2.9], [40000, -3.6]];
+function bcFromTeff(T) {
+  if (T <= BC_T[0][0]) return BC_T[0][1];
+  for (let i = 1; i < BC_T.length; i++) {
+    const [t1, b1] = BC_T[i];
+    if (T <= t1) { const [t0, b0] = BC_T[i - 1]; return b0 + ((T - t0) / (t1 - t0)) * (b1 - b0); }
+  }
+  return BC_T[BC_T.length - 1][1];
+}
+
 // Leuchtkraft in Sonnenleuchtkräften: aus Radius & Teff (Stefan-Boltzmann) oder
 // aus scheinbarer Helligkeit, Parallaxe und bolometrischer Korrektur (Näherung)
 export function luminosity(s) {
   if (s.radiusSun && s.teffK) return { L: s.radiusSun ** 2 * (s.teffK / 5772) ** 4, estimated: false };
-  const bc = bcFor(s.spectralType);
+  const bc = s.teffK ? bcFromTeff(s.teffK) : bcFor(s.spectralType);
   if (s.vmag == null || !s.parallaxMas || bc == null) return { L: null, estimated: true };
   const Mv = s.vmag + 5 * Math.log10(s.parallaxMas) - 10;
   return { L: 10 ** (-0.4 * (Mv + bc - 4.74)), estimated: true };

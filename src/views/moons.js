@@ -6,6 +6,7 @@
 // Ein Mondsystem wird erst eingeblendet, wenn die Kamera nah genug am Planeten ist.
 import * as THREE from 'three';
 import MOONS from '../data/moons.json';
+import { EXTRA_MOONS } from '../data/extramoons.js';
 import { julianDate } from '../lib/orbits.js';
 import { OBLIQUITY_DEG } from '../data/solarsystem.js';
 import { PLANET_MAPS } from '../data/planetmaps.js';
@@ -14,7 +15,8 @@ import { trekTexture } from '../lib/trekTexture.js';
 const DEG = Math.PI / 180;
 const MOON_TEXTURES = new Set(['triton', 'charon', 'miranda', 'ariel', 'umbriel', 'titania', 'oberon', 'deimos']);
 const STEPS = 128;
-export const MOON_LIST = MOONS.moons;
+// JPL-Monde + Monde von Zwergplaneten/Asteroiden aus der Literatur (extramoons.js)
+export const MOON_LIST = [...MOONS.moons, ...EXTRA_MOONS];
 
 // RA/Dec (J2000, äquatorial) → Einheitsvektor im ekliptikalen System
 function eqToEcl(raDeg, decDeg) {
@@ -177,7 +179,8 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
 export const moonBodies = () => MOON_LIST.map(toBody);
 
 function toBody(m) {
-  const PARENT = { earth: 'der Erde', mars: 'des Mars', jupiter: 'des Jupiter', saturn: 'des Saturn', uranus: 'des Uranus', neptune: 'des Neptun', pluto: 'des Pluto' };
+  const PARENT = { earth: 'der Erde', mars: 'des Mars', jupiter: 'des Jupiter', saturn: 'des Saturn', uranus: 'des Uranus', neptune: 'des Neptun', pluto: 'des Pluto',
+    eris: 'der Eris', haumea: 'der Haumea', makemake: 'des Makemake', gonggong: 'des Gonggong', quaoar: 'des Quaoar', orcus: 'des Orcus', didymos: 'des Didymos' };
   return {
     ...m,
     id: `moon-${m.id}`,
