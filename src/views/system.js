@@ -116,6 +116,10 @@ export function createSystemView(container, { onSelect }) {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.zoomToCursor = true;   // Mausrad zoomt dorthin, wo der Zeiger steht
+  controls.rotateSpeed = 0.7;
+  controls.zoomSpeed = 1.3;
   controls.minDistance = 0.3;
   controls.maxDistance = 600000;
 
@@ -497,6 +501,7 @@ export function createSystemView(container, { onSelect }) {
       if (sunLabel) sunLabel.visible = !want;
       container.classList.toggle('star-view', want);
     }
+    refArrows.visible = layerOn.ref === true;
     if (want) refArrows.scale.setScalar(dist * 0.32); // Kreuz wächst mit, bleibt im Bild
   }
 
@@ -516,17 +521,48 @@ export function createSystemView(container, { onSelect }) {
     const hit = raycaster.intersectObjects([...[...bodies.values()].map((b) => b.mesh), ...moons.meshes(), ...stars.meshes()], false)[0];
     if (hit) onSelect(hit.object.userData.body);
   });
+  renderer.domElement.addEventListener('dblclick', (e) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects([...[...bodies.values()].map((b) => b.mesh), ...moons.meshes(), ...stars.meshes()], false)[0];
+    const body = hit?.object.userData.body;
+    if (!body) return;
+    onSelect(body);
+    focus(body.id);
+  });
 
   // --- Kamera-Flüge -------------------------------------------------------------------
+  // Flug wie bei einem Globus-Programm: Blickziel gleitet zum neuen Ziel, der Kameraabstand wird
+  // logarithmisch überblendet und bei weiten Strecken in einem Bogen angehoben (erst raus, dann rein).
+  // Zeitbasiert (unabhängig von der Bildrate), Dauer wächst mit der Größenordnung des Sprungs.
   let flight = null;
   let follow = null; // Körper, dem die Kamera nach dem Anflug folgt
+  const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
   function flyTo(toPos, toTarget, followId = null) {
+    const fromTarget = controls.target.clone();
+    const o0 = camera.position.clone().sub(fromTarget), o1 = toPos.clone().sub(toTarget);
+    const r0 = Math.max(o0.length(), 1e-3), r1 = Math.max(o1.length(), 1e-3);
+    const travel = fromTarget.distanceTo(toTarget);
+    const scaleJump = Math.abs(Math.log(r1 / r0)) + Math.log1p(travel / Math.min(r0, r1));
     flight = {
-      t: 0,
-      fromPos: camera.position.clone(), toPos,
-      fromTarget: controls.target.clone(), toTarget,
+      start: performance.now(),
+      duration: Math.min(4200, 1100 + 260 * scaleJump),
+      fromTarget, toTarget, r0, r1,
+      dir0: o0.normalize(), dir1: o1.normalize(),
+      lift: Math.min(travel * 0.55, Math.max(r0, r1) * 40), // Bogenhöhe: genug, um Start und Ziel zu sehen
     };
     follow = followId;
+  }
+  function stepFlight(now) {
+    const f = flight;
+    const x = Math.min(1, (now - f.start) / f.duration);
+    const k = ease(x);
+    controls.target.lerpVectors(f.fromTarget, f.toTarget, k);
+    const dir = f.dir0.clone().lerp(f.dir1, k).normalize();
+    const r = Math.exp(Math.log(f.r0) + (Math.log(f.r1) - Math.log(f.r0)) * k) + f.lift * Math.sin(Math.PI * k);
+    camera.position.copy(controls.target).addScaledVector(dir, r);
+    if (x >= 1) flight = null;
   }
 
   function focus(bodyId) {
@@ -541,7 +577,9 @@ export function createSystemView(container, { onSelect }) {
       : isMoon ? r * 7 + 0.2 : Math.max(r * 8 + 10, moons.extent(bodyId) * 2.2);
     controls.minDistance = Math.max(0.02, r * 1.3);
     const target = worldPos(bodyId);
-    flyTo(target.clone().add(new THREE.Vector3(0, back * 0.45 + r * 2, back)), target, bodyId);
+    const dir = camera.position.clone().sub(target).normalize();
+    dir.y = Math.max(dir.y, 0) + 0.35; // leicht von oben, damit Bahnen/Mondsysteme sichtbar sind
+    flyTo(target.clone().addScaledVector(dir.normalize(), back + r * 2), target, bodyId);
   }
 
   // Überblick über einen Bereich bis `au` AE
@@ -610,11 +648,7 @@ export function createSystemView(container, { onSelect }) {
       update();
     }
     if (flight) {
-      flight.t = Math.min(1, flight.t + 0.02);
-      const k = 1 - Math.pow(1 - flight.t, 3);
-      camera.position.lerpVectors(flight.fromPos, flight.toPos, k);
-      controls.target.lerpVectors(flight.fromTarget, flight.toTarget, k);
-      if (flight.t >= 1) flight = null;
+      stepFlight(performance.now());
     } else if (follow) {
       // Kamera wandert mit dem verfolgten Körper mit
       const pos = worldPos(follow);
@@ -639,7 +673,7 @@ export function createSystemView(container, { onSelect }) {
     labels.render(scene, camera);
     if (now - lastDeclutter > 0.15) { lastDeclutter = now; declutter(); }
   });
-  controls.addEventListener('start', () => { if (!flight) follow = null; });
+  controls.addEventListener('start', () => { flight = null; follow = null; }); // Eingriff übernimmt sofort
 
   update();
 
@@ -660,6 +694,7 @@ export function createSystemView(container, { onSelect }) {
     setLayer(name, visible) {
       layerOn[name] = visible;
       if (name === 'orbits') { orbitsOn = visible; applyOrbitStyle(); return; }
+      if (name === 'ref') return; // wird in updateStarView angewendet
       if (!starView) layers[name].visible = visible;
     },
     setOrbitMode(mode) { orbitMode = mode; applyOrbitStyle(); },

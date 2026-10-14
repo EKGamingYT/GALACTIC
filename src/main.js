@@ -127,27 +127,51 @@ function showPanel(html) {
 // Panel für das ganze Sonnensystem (in der Sternansicht anklickbar)
 function showSystemPanel() {
   panelBody = null;
-  system.select(null);
+  system.select('sun');
   const date = clock.date();
   const [hzIn, hzOut] = HABITABLE_ZONE.conservative;
-  const inHz = BODIES.filter((b) => b.elements).map((b) => {
+  const planets = BODIES.filter((b) => b.elements && b.type === 'Planet').map((b) => {
     const p = heliocentricPosition(b, date);
-    return { b, r: Math.hypot(p.x, p.y, p.z) };
-  }).filter(({ r }) => r >= hzIn && r <= hzOut);
+    const a = b.elements[0];
+    return { b, a, r: Math.hypot(p.x, p.y, p.z), years: Math.pow(a, 1.5), inHz: a >= hzIn && a <= hzOut };
+  });
+  const dwarfs = ['ceres', 'pluto', 'eris', 'haumea', 'makemake']
+    .map((id) => BODIES.find((b) => b.id === id) ?? SMALL_BODIES.find((b) => b.id === id)).filter(Boolean);
   const row = ([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`;
   showPanel(`
-    <p class="eyebrow">${SOLAR_SYSTEM.type}</p>
+    <p class="eyebrow">${SOLAR_SYSTEM.type} · 1 Stern</p>
     <h2 style="--accent:${SOLAR_SYSTEM.color}">${SOLAR_SYSTEM.name}</h2>
-    <dl class="facts facts-wide">${SOLAR_SYSTEM.facts.map(row).join('')}
-      <dt>In der habitablen Zone</dt><dd>${inHz.length
-        ? inHz.map(({ b, r }) => `${b.name} <small>(${fmt(r, ' AE', 2)})</small>`).join(', ')
-        : 'derzeit kein Planet'}</dd>
+    <p class="desc">Unser Heimatsystem – ein offizieller Eigenname existiert nicht; der Stern heißt Sonne (lat. Sol).</p>
+    <dl class="facts facts-wide">
+      <dt>Planeten</dt><dd>8</dd>
+      <dt>Zwergplaneten (IAU)</dt><dd>5</dd>
+      <dt>Bekannte Monde</dt><dd>${fmt(MOON_BODIES.length)}</dd>
+      <dt>In der habitablen Zone</dt><dd>${planets.filter((p) => p.inHz).map((p) => p.b.name).join(', ')}</dd>
     </dl>
+    <p class="eyebrow">Stern</p>
+    <ul class="member-list"><li><button data-go="sun"><i style="background:#fff1c9"></i>
+      <span><strong>Sonne</strong><small>G2V · Leuchtkraft 1 L☉ · HZ ${fmt(hzIn, '', 2)}–${fmt(hzOut, ' AE', 2)} · 5.772 K</small></span>
+    </button></li></ul>
+    <p class="eyebrow">Planeten</p>
+    <ul class="member-list">${planets.map((p) => `<li><button data-go="${p.b.id}"><i style="background:${p.b.color}"></i>
+      <span><strong>${p.b.name}${p.inHz ? ' <span class="sp-badge">HZ</span>' : ''}</strong>
+      <small>${fmt(p.a, ' AE', 2)} · Umlauf ${fmt(p.years, '', p.years < 2 ? 2 : 1)} ${Math.abs(p.years - 1) < 0.01 ? 'Jahr' : 'Jahre'} · ${fmt(p.b.radiusKm, ' km')} · ${fmt(p.b.moons)} ${p.b.moons === 1 ? 'Mond' : 'Monde'} · jetzt ${fmt(p.r, ' AE', 2)}</small></span>
+    </button></li>`).join('')}</ul>
+    <p class="eyebrow">Zwergplaneten</p>
+    <div class="chips">${dwarfs.map((d) => `<button data-go="${d.id}"><i style="background:${d.color}"></i>${d.name}</button>`).join('')}</div>
+    <p class="eyebrow">Daten der Sonne</p>
+    <dl class="facts facts-wide">${SOLAR_SYSTEM.facts.filter(([k]) => !/Planeten|Zwergplaneten|Habitable/.test(k)).map(row).join('')}</dl>
     <p class="eyebrow">Lage im Universum</p>
     <dl class="facts facts-wide">${SOLAR_SYSTEM.galaxy.map(row).join('')}</dl>
-    <p class="muted small">Habitable Zone nach Kopparapu et al. (2013/14): Bereich, in dem flüssiges Wasser
-    auf der Oberfläche eines erdähnlichen Planeten möglich ist (grünes Band in der Systemansicht).
-    Quellen: NASA Sun Fact Sheet, IAU 2015, GRAVITY Collaboration 2019, IERS (ICRF3).</p>`);
+    <p class="muted small">Habitable Zone (konservativ) nach Kopparapu et al. (2013/14) – grünes Band in der Ansicht.
+    Quellen: NASA Planetary &amp; Sun Fact Sheets, IAU 2015, GRAVITY Collaboration 2019, IERS (ICRF3).</p>`);
+  panel.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => {
+    const id = b.dataset.go;
+    const body = BODIES.find((x) => x.id === id) ?? SMALL_BODIES.find((x) => x.id === id);
+    if (!body) return;
+    selectBody(body);
+    system.focus(id);
+  }));
 }
 
 // Panel eines Nachbar-Sternsystems: Sterne (mit Leuchtkraft & habitabler Zone) und Planeten
@@ -315,6 +339,7 @@ controls.innerHTML = `
     <label><input type="checkbox" data-layer="comets" checked /> Kometen</label>
     <label><input type="checkbox" data-layer="oort" checked /> Oortsche Wolke</label>
     <label><input type="checkbox" data-layer="planet9" checked /> Planet Neun?</label>
+    <label><input type="checkbox" data-layer="ref" /> Koordinatenkreuz</label>
   </div>
   <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;
 $('#view-system').appendChild(controls);
@@ -407,6 +432,13 @@ mapSelect.onchange = () => (location.hash = `#/body/${mapSelect.value}`);
 $('#view-body').before(bodyTabs);
 bodyTabs.after(layerBar);
 $('#view-body').after(mapStatus);
+
+// Tastatur: H = Überblick, Esc = Panel schließen (nicht während der Eingabe in Suchfeldern)
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, select, textarea')) return;
+  if (e.key === 'Escape') panel.querySelector('.close')?.click();
+  if ((e.key === 'h' || e.key === 'H') && location.hash.startsWith('#/system')) system.frame(52);
+});
 
 // Ziehen startet nie einen Browser-Drag (Links/Bilder würden sonst in neue Tabs gezogen)
 document.addEventListener('dragstart', (e) => e.preventDefault());

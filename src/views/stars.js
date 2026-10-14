@@ -52,7 +52,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     // Nahansicht: kleine, überhelle Kugel (HDR-Farbe > 1 → leuchtet im Bloom wie ein Stern)
     const r = Math.max(0.08, 0.8 * Math.sqrt(s.radiusSun || 0.1));
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(2.6) }));
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.5) }));
     sphere.userData.body = body;
     node.add(sphere);
     const label = makeLabel(s.name, s.description ? 'star-label star-major' : 'star-label', r + 0.5, body);
