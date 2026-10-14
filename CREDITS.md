@@ -33,6 +33,7 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | NASA Exoplanet Archive (exoplanetarchive.ipac.caltech.edu) | Exoplaneten der Nachbarsterne | NASA/Caltech-IPAC |
 | Brown & Batygin 2021 (AJ 162, 219) | Hypothetische Bahn von Planet Neun | wissenschaftliche Veröffentlichung |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
+| IAU Gazetteer of Planetary Nomenclature (USGS Astrogeology Science Center, planetarynames.wr.usgs.gov; GIS-Download der Mittelpunkte, via asc-planetarynames-data.s3.us-west-2.amazonaws.com) – offizielle Namen mit Lage, Durchmesser und Typ (21 Körper, in src/data/nomenclature/ ausgewählt: große Krater plus alle übrigen Merkmalstypen) | Ortsnamen in den Planetenkarten (Namensschalter, Klick auf einen Namen) | gemeinfrei (USGS/NASA); Namen von der IAU (Working Group for Planetary System Nomenclature), Abruf per scripts/fetch-nomenclature.mjs |
 
 ## Software
 | Bibliothek | Lizenz |

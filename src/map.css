@@ -1,0 +1,102 @@
+/* Planetenkarte: Bedienelemente innerhalb der Karte (siehe src/views/map/ui.js).
+   Nutzt die globalen Variablen --surface, --surface-strong, --line, --text, --muted, --accent aus style.css. */
+.map-stage { position: absolute; inset: 0; }
+.map-ui { position: absolute; inset: 0; z-index: 5; pointer-events: none; font-size: 12px; }
+.map-ui button { font: inherit; color: var(--text); }
+.map-ui .map-info, .map-ui .map-chip, .map-ui .map-btn, .map-ui .map-hud, .map-ui .map-feature { pointer-events: auto; }
+
+/* gemeinsame Glasflächen */
+.map-info, .map-hud, .map-feature, .map-btn, .map-chip {
+  background: var(--surface); border: 1px solid var(--line); backdrop-filter: blur(10px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+/* linke Spalte: Infokarte + Schalter */
+.map-left { position: absolute; top: 12px; left: 12px; width: 252px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.map-info { width: 100%; border-radius: 12px; overflow: hidden; }
+.mi-head {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'e c' 't c'; align-items: center; column-gap: 8px;
+  width: 100%; padding: 9px 12px; background: none; border: 0; text-align: left;
+}
+.mi-head:hover .mi-caret { color: var(--accent); }
+.mi-eyebrow { grid-area: e; color: var(--muted); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; line-height: 1.2; }
+.mi-title { grid-area: t; font-family: Orbitron, sans-serif; font-size: 16px; letter-spacing: 0.04em; line-height: 1.3; }
+.mi-caret { grid-area: c; color: var(--muted); font-size: 14px; transition: transform 0.2s; }
+.map-info[data-open='0'] .mi-caret { transform: rotate(-90deg); }
+.map-info[data-open='0'] .mi-body { display: none; }
+.mi-body { padding: 0 12px 11px; border-top: 1px solid var(--line); }
+.mi-body dl { display: grid; grid-template-columns: 52px 1fr; gap: 3px 8px; margin: 9px 0 0; }
+.mi-body dt { color: var(--muted); }
+.mi-body dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mi-body dd.mi-credit, .mi-body dd.mi-names { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.mi-hints { list-style: none; margin: 9px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line); color: var(--muted); font-size: 11px; line-height: 1.5; }
+.mi-hints li::before { content: '›'; margin-right: 6px; color: var(--accent); }
+.mi-legend { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11px; color: var(--muted); }
+.mi-legend[hidden], .mi-body [hidden] { display: none; }
+.mi-legend span::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--c); box-shadow: 0 0 5px var(--c); }
+
+.map-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.map-ui .map-chip { padding: 4px 12px; border-radius: 999px; color: var(--muted); font-size: 12px; }
+.map-chip[hidden] { display: none; }
+.map-ui .map-chip:hover { color: var(--text); border-color: var(--accent); }
+.map-ui .map-chip[aria-pressed='true'] { color: var(--text); background: rgba(110, 168, 255, 0.24); border-color: var(--accent); }
+
+/* rechte Spalte: Kompass, Zoom, Ganzer Globus */
+.map-right { position: absolute; right: 12px; bottom: 46px; display: flex; flex-direction: column; gap: 6px; transition: right 0.2s; }
+@media (min-width: 1100px) { body:has(#panel:not(.hidden)) .map-right { right: 372px; } }
+.map-btn {
+  width: 38px; height: 38px; padding: 0; display: grid; place-items: center; border-radius: 11px;
+  font-size: 22px; line-height: 1; transition: border-color 0.15s, background 0.15s;
+}
+.map-btn:hover { border-color: var(--accent); background: rgba(110, 168, 255, 0.2); }
+.map-btn:active { transform: scale(0.95); }
+.map-btn svg { width: 22px; height: 22px; }
+.map-compass { border-radius: 50%; width: 42px; height: 42px; margin-bottom: 4px; }
+.map-compass svg { width: 34px; height: 34px; }
+
+/* Positionsanzeige & Maßstab unten links */
+.map-hud {
+  position: absolute; left: 12px; bottom: 30px; padding: 6px 11px; border-radius: 10px;
+  display: flex; flex-direction: column; gap: 4px; min-width: 196px; font-variant-numeric: tabular-nums;
+}
+.mh-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; white-space: nowrap; }
+.mh-k { color: var(--muted); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+.mh-coord { color: var(--text); }
+.mh-alt { color: var(--muted); font-size: 11px; }
+.mh-scale { display: inline-flex; flex-direction: column; gap: 1px; font-size: 11px; color: var(--text); }
+.mh-scale i { display: block; height: 5px; min-width: 2px; border: 1.5px solid var(--text); border-top: 0; transition: width 0.12s; }
+
+/* Karte zu einem angeklickten Namen */
+.map-feature {
+  position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); width: min(330px, calc(100% - 24px));
+  padding: 11px 14px 12px; border-radius: 12px;
+}
+.map-feature[hidden] { display: none; }
+.map-feature h3 { margin: 1px 0 3px; font-family: Orbitron, sans-serif; font-size: 17px; letter-spacing: 0.03em; }
+.mf-type { margin: 0; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mf-type::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.mf-meta { margin: 0 0 8px; color: var(--text); }
+.mf-src { margin: 8px 0 0; font-size: 10px; color: var(--muted); }
+.mf-actions { display: flex; align-items: center; gap: 12px; }
+.mf-actions button {
+  padding: 4px 12px; border-radius: 8px; border: 1px solid var(--accent); background: rgba(110, 168, 255, 0.18);
+}
+.mf-actions button:hover { background: rgba(110, 168, 255, 0.34); }
+.mf-actions a { color: var(--accent); }
+.mf-actions a:hover { text-decoration: underline; }
+.mf-x { position: absolute; top: 4px; right: 8px; background: none; border: 0; font-size: 20px; }
+.map-ui .mf-x { color: var(--muted); }
+
+/* Cesium: Kreditzeile dezent, eigene Werkzeugleiste entfällt */
+.map-stage .cesium-viewer-toolbar { display: none; }
+.map-stage .cesium-widget-credits { font-size: 10px; }
+
+@media (max-width: 720px) {
+  .map-left { top: 104px; left: 8px; width: min(252px, calc(100% - 64px)); }
+  .map-right { right: 8px; bottom: 74px; }
+  .map-btn { width: 36px; height: 36px; }
+  .map-compass { width: 40px; height: 40px; }
+  .map-hud { left: 8px; bottom: 74px; min-width: 0; padding: 5px 9px; }
+  .mh-row:nth-child(2) .mh-alt { display: none; }
+  .map-feature { bottom: 122px; }
+}
