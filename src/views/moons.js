@@ -60,7 +60,7 @@ function eccentricAnomaly(m, jd) {
   return E;
 }
 
-export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadius, makeLabel, loadTex }) {
+export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadius, makeLabel, loadTex, limitFor }) {
   const systems = new Map(); // parent → { group, items, points, extent }
   const byId = new Map();
 
@@ -75,11 +75,12 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
     const sys = systems.get(m.parent);
     const rp = sceneRadius(m.parent);
     const ratio = Math.max(1.05, m.aKm / planetRadiusKm(m.parent));
-    // Logarithmische Stauchung: innere Monde knapp außerhalb, äußere Irreguläre weiter draußen
-    const display = rp * (1.6 + 2.3 * Math.log10(ratio));
+    // Logarithmische Stauchung: innere Monde knapp außerhalb, äußere Irreguläre weiter draußen.
+    // Endgültiger Abstand (passend zum Platz bis zu den Nachbarbahnen) siehe fitSystem().
+    const raw = rp * (1.6 + 2.3 * Math.log10(ratio));
     const basis = frameBasis(m);
-    const item = { m, basis, k: display / m.aKm, display };
-    sys.extent = Math.max(sys.extent, m.major ? display : 0);
+    const item = { m, basis, raw, k: raw / m.aKm };
+    sys.rp = rp;
 
     if (m.major) {
       const r = Math.max(0.07, 0.22 * Math.pow((m.radiusKm || 50) / 1000, 0.45) * 0.75);
@@ -100,8 +101,8 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
       item.label = lbl;
       // Bahnlinie
       const pts = [];
-      for (let s = 0; s <= STEPS; s++) pts.push(orbitPoint(m, basis, (s / STEPS) * Math.PI * 2).multiplyScalar(item.k));
-      item.orbitPts = pts;
+      for (let s = 0; s <= STEPS; s++) pts.push(orbitPoint(m, basis, (s / STEPS) * Math.PI * 2));
+      item.orbitPts = pts; // in km, Skalierung je Darstellung in update()
       item.orbit = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map(() => new THREE.Vector3())),
         new THREE.LineBasicMaterial({ color: 0x9fb4d8, transparent: true, opacity: 0.28 }));
       sys.group.add(item.orbit);
@@ -117,28 +118,48 @@ export function createMoonSystems(scene, { planetRadiusKm, planetMesh, sceneRadi
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(sys.minor.length * 3), 3));
     sys.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xb9c2d0, size: 1.5, sizeAttenuation: false, transparent: true, opacity: 0.6 }));
     sys.group.add(sys.points);
-    sys.extent = Math.max(sys.extent, sceneRadius(parent) * 4);
   }
 
-  // Ekliptik (x, y, z) → Szene (x, z, −y); im Lehrbuch-Modus flach (z · blend)
-  const toScene = (v, blend) => new THREE.Vector3(v.x, v.z * blend, -v.y);
+  // Ekliptik (x, y, z) → Szene (x, z, −y). Mondbahnen behalten in beiden Modi ihre echte Neigung –
+  // flach gedrückt würden z. B. die Uranusmonde (98° Achsneigung) zu Linien durch den Planeten.
+  const toScene = (v) => new THREE.Vector3(v.x, v.z, -v.y);
+
+  // Mondsystem in den Platz bis zu den Nachbarbahnen einpassen (sonst kreuzt etwa die Mondbahn
+  // im gestauchten Lehrbuch-Modus die Venusbahn): größter großer Mond höchstens bei `limit`,
+  // innen nie näher als 1,35 Planetenradien.
+  function fitSystem(parent, sys, blend) {
+    const limit = limitFor(parent, blend);
+    const base = sys.rp * 1.35;
+    const majors = sys.items.length ? sys.items : sys.minor;
+    const maxRaw = Math.max(...majors.map((it) => it.raw));
+    const squeeze = maxRaw > limit ? (limit - base) / Math.max(maxRaw - base, 1e-6) : 1;
+    let extent = 0;
+    for (const it of [...sys.items, ...sys.minor]) {
+      let d = maxRaw > limit ? base + (it.raw - base) * squeeze : it.raw;
+      d = Math.min(Math.max(d, base), limit * 1.25);
+      it.k = d / it.m.aKm;
+      if (it.mesh) extent = Math.max(extent, d);
+    }
+    sys.extent = Math.max(extent, sys.rp * 4);
+  }
 
   let lastBlend = null;
   function update(date, blend) {
     const jd = julianDate(date);
     for (const [parent, sys] of systems) {
+      if (lastBlend !== blend) fitSystem(parent, sys, blend);
       sys.group.position.copy(planetMesh(parent).position);
       for (const it of sys.items) {
-        it.mesh.position.copy(toScene(orbitPoint(it.m, it.basis, eccentricAnomaly(it.m, jd)).multiplyScalar(it.k), blend));
+        it.mesh.position.copy(toScene(orbitPoint(it.m, it.basis, eccentricAnomaly(it.m, jd)).multiplyScalar(it.k)));
         if (lastBlend !== blend) {
           const arr = it.orbit.geometry.attributes.position.array;
-          it.orbitPts.forEach((p, s) => toScene(p, blend).toArray(arr, s * 3));
+          it.orbitPts.forEach((p, s) => toScene(p.clone().multiplyScalar(it.k)).toArray(arr, s * 3));
           it.orbit.geometry.attributes.position.needsUpdate = true;
           it.orbit.geometry.computeBoundingSphere();
         }
       }
       const arr = sys.points.geometry.attributes.position.array;
-      sys.minor.forEach((it, s) => toScene(orbitPoint(it.m, it.basis, eccentricAnomaly(it.m, jd)).multiplyScalar(it.k), blend).toArray(arr, s * 3));
+      sys.minor.forEach((it, s) => toScene(orbitPoint(it.m, it.basis, eccentricAnomaly(it.m, jd)).multiplyScalar(it.k)).toArray(arr, s * 3));
       sys.points.geometry.attributes.position.needsUpdate = true;
       sys.points.geometry.computeBoundingSphere();
     }

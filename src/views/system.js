@@ -18,6 +18,7 @@ import { createSun } from '../lib/sun.js';
 import { createMoonSystems } from './moons.js';
 import { createSkybox } from '../lib/skybox.js';
 import { createStars } from './stars.js';
+import { createIntro } from './intro.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
 import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
@@ -213,6 +214,15 @@ export function createSystemView(container, { onSelect }) {
     planetMesh: (id) => bodies.get(id).mesh,
     sceneRadius: (id) => meshRadius(bodies.get(id).mesh),
     loadTex,
+    // Platz für ein Mondsystem: gut ⅓ des Abstands zur nächsten Planetenbahn (im aktuellen Maßstab),
+    // mindestens 2,4 Planetenradien
+    limitFor: (id, blend) => {
+      const host = bodies.get(id).body;
+      const a = host.elements?.[0] ?? host.kepler?.a;
+      const others = BODIES.filter((b) => b.elements && b.id !== id).map((b) => b.elements[0]);
+      const gap = Math.min(...others.map((o) => Math.abs(sceneDistance(o, blend) - sceneDistance(a, blend))));
+      return Math.max(meshRadius(bodies.get(id).mesh) * 2.4, gap * 0.38);
+    },
     makeLabel: (text, cls, y, body) => {
       const l = makeLabel(text, cls, y, () => onSelect(body), body.color);
       declutterItems.push({ el: l.element, id: body.id, prio: 25 });
@@ -335,6 +345,7 @@ export function createSystemView(container, { onSelect }) {
   let orbitsOn = true;
   let orbitMode = 'all'; // 'all' | 'selected'
   function applyOrbitStyle() {
+    if (intro?.running()) return; // die Intro-Animation steuert die Bahnen gerade selbst
     for (const { body, orbit } of bodies.values()) {
       if (!orbit) continue;
       const sel = body.id === selectedId;
@@ -632,6 +643,7 @@ export function createSystemView(container, { onSelect }) {
     const now = performance.now() / 1000;
     lastFrame = now;
     sun.tick(now, camera);
+    if (intro?.running()) intro.step(now);
     gasTime.value = now;
     // Eigenrotation echt aus dem simulierten Datum: Winkel = 2π · (Zeit seit J2000 / Periode).
     // Anti-Strobe: springt der Winkel zwischen zwei Bildern um > 0,35 rad (schneller Zeitraffer),
@@ -676,6 +688,21 @@ export function createSystemView(container, { onSelect }) {
     if (now - lastDeclutter > 0.15) { lastDeclutter = now; declutter(); }
   });
   controls.addEventListener('start', () => { flight = null; follow = null; }); // Eingriff übernimmt sofort
+
+  // --- Intro: startet, wenn der Startbildschirm fertig ist (Ereignis aus src/ui/boot.js) --------
+  let intro = null;
+  intro = createIntro({
+    bodies, layers,
+    ordered: ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'],
+  });
+  window.addEventListener('galactic:intro', () => {
+    if (!active || !intro.begin()) return;
+    // aus großer Ferne in den Überblick fliegen
+    const d = sceneDistance(52, blend) * 1.25 + 8;
+    controls.target.set(0, 0, 0);
+    camera.position.set(0, d * 3.2, d * 4.4);
+    frame(52);
+  }, { once: true });
 
   update();
 
