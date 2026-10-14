@@ -490,7 +490,9 @@ export function createSystemView(container, { onSelect }) {
   let starView = false;
   function updateStarView() {
     const dist = camera.position.length();
-    const want = dist > sceneDistance(STAR_VIEW_AU, blend);
+    // Hysterese: erst deutlich jenseits der Grenze umschalten, erst deutlich diesseits zurück (kein Flackern)
+    const edge = sceneDistance(STAR_VIEW_AU, blend);
+    const want = starView ? dist > edge * 0.9 : dist > edge * 1.1;
     if (want !== starView) {
       starView = want;
       starGroup.visible = want;
