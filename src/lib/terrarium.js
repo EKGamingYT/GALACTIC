@@ -9,6 +9,7 @@ import {
 const URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 const SIZE = 65;       // Stützpunkte pro Kachelkante
 const MAX_LEVEL = 15;  // feinste verfügbare Ebene
+const MIN_LEVEL = 6;   // darunter (Kacheln > ~600 km) sind Höhen aus der Ferne unsichtbar → flach, ohne Netzanfrage
 
 export function createTerrariumTerrain(ellipsoid, exaggerate = 1) {
   const tilingScheme = new WebMercatorTilingScheme({ ellipsoid, numberOfLevelZeroTilesX: 1, numberOfLevelZeroTilesY: 1 });
@@ -16,6 +17,7 @@ export function createTerrariumTerrain(ellipsoid, exaggerate = 1) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 256;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const flat = new Float32Array(SIZE * SIZE);
 
   return {
     tilingScheme,
@@ -29,6 +31,9 @@ export function createTerrariumTerrain(ellipsoid, exaggerate = 1) {
     loadTileDataAvailability: () => undefined,
 
     requestTileGeometry(x, y, level) {
+      // Grobe Ebenen sofort flach liefern: jede Bildkachel wartet in Cesium auf ihre Geländekachel –
+      // so erscheinen Karten beim Öffnen und Heranzoomen ohne diesen Umweg
+      if (level < MIN_LEVEL) return Promise.resolve(new HeightmapTerrainData({ buffer: flat, width: SIZE, height: SIZE, childTileMask: 15 }));
       const url = URL.replace('{z}', level).replace('{x}', x).replace('{y}', y);
       const image = Resource.fetchImage({ url, preferImageBitmap: true });
       if (!image) return undefined; // Cesium drosselt Anfragen – später erneut

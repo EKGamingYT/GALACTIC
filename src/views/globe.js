@@ -9,8 +9,8 @@ import {
 } from 'cesium';
 
 // Mehr gleichzeitige Kachel-Anfragen je Server (Standard 6) → Karten werden beim Zoomen deutlich schneller scharf
-RequestScheduler.maximumRequestsPerServer = 18;
-RequestScheduler.maximumRequests = 64;
+RequestScheduler.maximumRequestsPerServer = 24; // die Kachelserver sprechen HTTP/2 (viele Anfragen über eine Verbindung)
+RequestScheduler.maximumRequests = 96;
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import '../map.css';
 import { createTerrariumTerrain } from '../lib/terrarium.js';
@@ -189,6 +189,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     globe.loadingDescendantLimit = 60;
     globe.preloadAncestors = true;
     globe.tileCacheSize = 1000;
+    // Schrägsicht: Kacheln am Horizont dürfen gröber sein (Nebel verdeckt sie ohnehin) → Mitte wird schneller scharf
+    scene.fog.enabled = true;
+    scene.fog.screenSpaceErrorFactor = 4;
     globe.showGroundAtmosphere = isEarth;
     if (!isEarth) { if (scene.sun) scene.sun.show = false; if (scene.moon) scene.moon.show = false; }
 

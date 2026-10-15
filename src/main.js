@@ -8,6 +8,11 @@ import { moonBodies } from './views/moons.js';
 import { STARS, starBody } from './views/stars.js';
 import { SYSTEMS } from './data/systems.js';
 import { createSystemPicker, MAX_LY } from './ui/systemPicker.js';
+
+// Kachel-Zwischenspeicher (Service Worker, nur im fertigen Build – im Dev-Server stört er Hot-Reload)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/tile-sw.js').catch(() => {}));
+}
 import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
