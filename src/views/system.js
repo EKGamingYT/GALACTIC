@@ -14,7 +14,7 @@ import { BODIES } from '../data/bodies.js';
 import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
-import { createSun } from '../lib/sun.js';
+import { createSun, createStarMaterial } from '../lib/sun.js';
 import { createMoonSystems } from './moons.js';
 import { createSkybox } from '../lib/skybox.js';
 import { createStars } from './stars.js';
@@ -146,7 +146,8 @@ export function createSystemView(container, { onSelect }) {
   // --- Körper ----------------------------------------------------------------
   const bodies = new Map(); // id -> { body, mesh, orbit }
   const declutterItems = []; // { el, id, prio } – für die automatische Beschriftungs-Entzerrung
-  const sun = createSun(4, loadTex(TEXTURES.sun.map));
+  const sunMap = loadTex(TEXTURES.sun.map);
+  const sun = createSun(4, sunMap);
   for (const body of [...BODIES, ...SMALL_BODIES]) {
     if (body.parent) continue;
     const isSun = body.id === 'sun';
@@ -183,7 +184,7 @@ export function createSystemView(container, { onSelect }) {
     if (atmo) mesh.add(atmo);
     if (body.ring) { const ring = createRing(radius, tex?.ring); mesh.add(ring); pushLit(ring.material); }
     const labelCls = !layer || layer === 'dwarfs' ? 'body-label' : 'minor-label';
-    const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => onSelect(body), body.color);
+    const label = makeLabel(body.name, labelCls, radius + (layer ? 0.5 : 0.9), () => pick(body), body.color);
     mesh.add(label);
     declutterItems.push({ el: label.element, id: body.id, prio: labelPriority(body, layer) });
 
@@ -224,7 +225,7 @@ export function createSystemView(container, { onSelect }) {
       return Math.max(meshRadius(bodies.get(id).mesh) * 2.4, gap * 0.38);
     },
     makeLabel: (text, cls, y, body) => {
-      const l = makeLabel(text, cls, y, () => onSelect(body), body.color);
+      const l = makeLabel(text, cls, y, () => pick(body), body.color);
       declutterItems.push({ el: l.element, id: body.id, prio: 25 });
       return l;
     },
@@ -232,12 +233,14 @@ export function createSystemView(container, { onSelect }) {
   // --- Nachbarsterne (≤ 20 Lj) mit Exoplaneten ---------------------------------------------
   const stars = createStars(scene, {
     sceneDistance, nearDistance, glowTexture,
+    starMaterial: (color) => createStarMaterial(sunMap, color, sun.time),
     makeLabel: (text, cls, y, body) => {
-      const l = makeLabel(text, cls, y, () => onSelect(body), body.color);
+      const l = makeLabel(text, cls, y, () => pick(body), body.color);
       declutterItems.push({ el: l.element, id: body.id, prio: cls.includes('star-major') ? 46 : 22 });
       return l;
     },
   });
+  if (import.meta.env.DEV) Object.assign(window, { __stars: stars, __camera: camera }); // nur lokales Testen
 
   // Weltposition eines Körpers, großen Mondes, Nachbarsterns oder Exoplaneten
   const worldPos = (id) => {
@@ -514,7 +517,7 @@ export function createSystemView(container, { onSelect }) {
       if (sunLabel) sunLabel.visible = !want;
       container.classList.toggle('star-view', want);
     }
-    refArrows.visible = layerOn.ref === true;
+    refArrows.visible = false; // ersetzt durch das Himmelsgitter (Ebene „Koordinatenkreuz“)
     if (want) refArrows.scale.setScalar(dist * 0.32); // Kreuz wächst mit, bleibt im Bild
   }
 
@@ -532,7 +535,7 @@ export function createSystemView(container, { onSelect }) {
     pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects([...[...bodies.values()].map((b) => b.mesh), ...moons.meshes(), ...stars.meshes()], false)[0];
-    if (hit) onSelect(hit.object.userData.body);
+    if (hit) pick(hit.object.userData.body);
   });
   renderer.domElement.addEventListener('dblclick', (e) => {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -552,7 +555,7 @@ export function createSystemView(container, { onSelect }) {
   let flight = null;
   let follow = null; // Körper, dem die Kamera nach dem Anflug folgt
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-  function flyTo(toPos, toTarget, followId = null) {
+  function flyTo(toPos, toTarget, followId = null, durationMs = null) {
     const fromTarget = controls.target.clone();
     const o0 = camera.position.clone().sub(fromTarget), o1 = toPos.clone().sub(toTarget);
     const r0 = Math.max(o0.length(), 1e-3), r1 = Math.max(o1.length(), 1e-3);
@@ -560,12 +563,13 @@ export function createSystemView(container, { onSelect }) {
     const scaleJump = Math.abs(Math.log(r1 / r0)) + Math.log1p(travel / Math.min(r0, r1));
     flight = {
       start: performance.now(),
-      duration: Math.min(4200, 1100 + 260 * scaleJump),
+      duration: durationMs ?? Math.min(4200, 1100 + 260 * scaleJump),
       fromTarget, toTarget, r0, r1,
       dir0: o0.normalize(), dir1: o1.normalize(),
       lift: Math.min(travel * 0.55, Math.max(r0, r1) * 40), // Bogenhöhe: genug, um Start und Ziel zu sehen
     };
     follow = followId;
+    setPivotMode(followId);
   }
   function stepFlight(now) {
     const f = flight;
@@ -595,11 +599,83 @@ export function createSystemView(container, { onSelect }) {
     flyTo(target.clone().addScaledVector(dir.normalize(), back + r * 2), target, bodyId);
   }
 
+  // --- Auswahl: Klick wählt aus und fliegt hin -----------------------------------------------
+  function pick(body) {
+    onSelect(body);
+    if (body.isSystem) focus(body.primaryId);
+    else if (body.id !== 'solar-system') focus(body.id);
+  }
+
+  // --- Drehpunkt: verfolgter Körper (Kamera dreht um ihn, Zoom direkt darauf zu) oder Freiflug ---
+  const nameOf = (id) => bodies.get(id)?.body.name ?? moons.get(id)?.mesh.userData.body.name
+    ?? stars.focusMesh(id)?.userData.body.name ?? id;
+  const pivotChip = document.createElement('div');
+  pivotChip.className = 'pivot-chip';
+  pivotChip.hidden = true;
+  pivotChip.innerHTML = '<span class="pv-ico"></span><span class="pv-text"></span><button type="button" title="Drehpunkt lösen – Freiflug (WASD)">Freiflug</button>';
+  container.appendChild(pivotChip);
+  pivotChip.querySelector('button').onclick = () => { follow = null; setPivotMode(null); };
+  function setPivotMode(id) {
+    const locked = !!id;
+    controls.zoomToCursor = !locked;  // um einen Körper: Zoom geradewegs auf ihn zu
+    controls.enablePan = !locked;     // Verschieben würde den Drehpunkt vom Körper lösen
+    pivotChip.hidden = !locked;
+    if (locked) pivotChip.querySelector('.pv-text').textContent = `Drehpunkt: ${nameOf(id)}`;
+  }
+
+  // Ring am Drehpunkt, solange gedreht/gezoomt wird
+  const pivotMarker = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: ringTexture(), color: 0x9fc4ff, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false,
+  }));
+  pivotMarker.scale.setScalar(0.028);
+  pivotMarker.renderOrder = 999;
+  pivotMarker.visible = false;
+  scene.add(pivotMarker);
+  let pivotTimer = null;
+  function showPivot() { clearTimeout(pivotTimer); pivotMarker.visible = true; }
+  function hidePivotSoon() { clearTimeout(pivotTimer); pivotTimer = setTimeout(() => (pivotMarker.visible = false), 700); }
+
+  // --- Freiflug mit WASD (Q/E runter/hoch, Shift schneller); Tempo passt sich dem Maßstab an ---
+  const keys = new Set();
+  const FLY_KEYS = { KeyW: 1, KeyS: 1, KeyA: 1, KeyD: 1, KeyQ: 1, KeyE: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };
+  window.addEventListener('keydown', (e) => {
+    if (!active || e.target.closest?.('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (FLY_KEYS[e.code]) { keys.add(e.code); e.preventDefault(); }
+    if (e.key === 'Shift') keys.add('Shift');
+  });
+  window.addEventListener('keyup', (e) => { keys.delete(e.code); if (e.key === 'Shift') keys.delete('Shift'); });
+  window.addEventListener('blur', () => keys.clear());
+  let lastFly = null;
+  const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(), move = new THREE.Vector3();
+  function stepFreeFlight(nowSec) {
+    const dt = lastFly === null ? 0 : Math.min(0.1, nowSec - lastFly);
+    lastFly = nowSec;
+    if (!keys.size || (keys.size === 1 && keys.has('Shift'))) return;
+    if (follow || flight) { follow = null; flight = null; setPivotMode(null); }
+    camera.getWorldDirection(fwd);
+    right.crossVectors(fwd, camera.up).normalize();
+    up.copy(camera.up);
+    move.set(0, 0, 0);
+    if (keys.has('KeyW') || keys.has('ArrowUp')) move.add(fwd);
+    if (keys.has('KeyS') || keys.has('ArrowDown')) move.sub(fwd);
+    if (keys.has('KeyD') || keys.has('ArrowRight')) move.add(right);
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) move.sub(right);
+    if (keys.has('KeyE')) move.add(up);
+    if (keys.has('KeyQ')) move.sub(up);
+    if (!move.lengthSq()) return;
+    // Tempo ∝ Abstand zum Blickziel (in der Nähe fein, zwischen den Sternen schnell)
+    const reach = Math.max(camera.position.distanceTo(controls.target), 0.5);
+    move.normalize().multiplyScalar(reach * (keys.has('Shift') ? 2.4 : 0.8) * dt);
+    camera.position.add(move);
+    controls.target.add(move);
+  }
+
+
   // Überblick über einen Bereich bis `au` AE
-  function frame(au) {
+  function frame(au, durationMs = null) {
     controls.minDistance = 0.3;
     const d = sceneDistance(au, blendTarget) * 1.25 + 8;
-    flyTo(new THREE.Vector3(0, d * 0.75, d * 1.05), new THREE.Vector3());
+    flyTo(new THREE.Vector3(0, d * 0.75, d * 1.05), new THREE.Vector3(), null, durationMs);
   }
 
   function resize() {
@@ -661,6 +737,7 @@ export function createSystemView(container, { onSelect }) {
       if (Math.abs(blend - blendTarget) < 0.025) blend = blendTarget;
       update();
     }
+    stepFreeFlight(now);
     if (flight) {
       stepFlight(performance.now());
     } else if (follow) {
@@ -683,11 +760,16 @@ export function createSystemView(container, { onSelect }) {
     updateStarView();
     controls.update();
     sky.position.copy(camera.position); // unendlich fern: wandert mit der Kamera
+    pivotMarker.position.copy(controls.target);
+    // Himmel dynamisch: nahe der hellen Sonne gedämpft, im tiefen All voller (logarithmisch nach Abstand)
+    const camDist = camera.position.length();
+    sky.material.uniforms.uBright.value = 0.5 + 0.45 * Math.min(1, Math.max(0, Math.log10(Math.max(camDist, 1) / 15) / 2.5));
     composer.render();
     labels.render(scene, camera);
     if (now - lastDeclutter > 0.15) { lastDeclutter = now; declutter(); }
   });
-  controls.addEventListener('start', () => { flight = null; follow = null; }); // Eingriff übernimmt sofort
+  controls.addEventListener('start', () => { flight = null; showPivot(); }); // Eingriff übernimmt sofort, Drehpunkt bleibt
+  controls.addEventListener('end', () => hidePivotSoon());
 
   // --- Intro: startet, wenn der Startbildschirm fertig ist (Ereignis aus src/ui/boot.js) --------
   let intro = null;
@@ -700,8 +782,8 @@ export function createSystemView(container, { onSelect }) {
     // aus großer Ferne in den Überblick fliegen
     const d = sceneDistance(52, blend) * 1.25 + 8;
     controls.target.set(0, 0, 0);
-    camera.position.set(0, d * 3.2, d * 4.4);
-    frame(52);
+    camera.position.set(0, d * 5.5, d * 8);
+    frame(52, 6500);
   }, { once: true });
 
   update();
@@ -723,7 +805,7 @@ export function createSystemView(container, { onSelect }) {
     setLayer(name, visible) {
       layerOn[name] = visible;
       if (name === 'orbits') { orbitsOn = visible; applyOrbitStyle(); return; }
-      if (name === 'ref') return; // wird in updateStarView angewendet
+      if (name === 'ref') { sky.material.uniforms.uGrid.value = visible ? 1 : 0; return; } // Himmelsgitter
       if (!starView) layers[name].visible = visible;
     },
     setOrbitMode(mode) { orbitMode = mode; applyOrbitStyle(); },
@@ -740,6 +822,19 @@ export function createSystemView(container, { onSelect }) {
     frame,
     setActive(v) { active = v; if (v) resize(); },
   };
+}
+
+// Dünner Ring (Drehpunkt-Markierung)
+function ringTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.strokeStyle = 'rgba(255,255,255,0.95)';
+  g.lineWidth = 3;
+  g.beginPath(); g.arc(32, 32, 26, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.9)';
+  g.beginPath(); g.arc(32, 32, 3, 0, Math.PI * 2); g.fill();
+  return new THREE.CanvasTexture(c);
 }
 
 // Weicher runder Lichtpunkt (für die Sonne in der Sternansicht)

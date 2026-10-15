@@ -19,20 +19,20 @@ function collectMaterials(group) {
 export function createIntro({ bodies, layers, ordered }) {
   let start = null;
   let fades = [];
-  const DURATION = 4.4;
+  const DURATION = 8.5;
 
   function begin() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
     start = performance.now() / 1000;
     // Ebenen, die nacheinander eingeblendet werden: [Gruppe, Startzeit, Dauer]
     const plan = [
-      ['dwarfs', 1.9], ['asteroids', 2.1], ['comets', 2.2], ['belts', 2.4],
-      ['hz', 2.8], ['zones', 3.0], ['planet9', 3.2], ['oort', 3.3],
+      ['dwarfs', 4.0], ['asteroids', 4.5], ['comets', 4.9], ['belts', 5.3],
+      ['hz', 6.0], ['zones', 6.4], ['planet9', 6.9], ['oort', 7.2],
     ];
     fades = plan.filter(([name]) => layers[name]).map(([name, t0]) => {
       const mats = collectMaterials(layers[name]);
       for (const e of mats) { e.m.transparent = true; e.m.opacity = 0; }
-      return { mats, t0, dur: 0.7 };
+      return { mats, t0, dur: 1.1 };
     });
     step(start);
     return true;
@@ -45,10 +45,10 @@ export function createIntro({ bodies, layers, ordered }) {
     ordered.forEach((id, i) => {
       const b = bodies.get(id);
       if (!b) return;
-      const t0 = id === 'sun' ? 0 : 0.35 + i * 0.17;
-      const s = easeOutBack(clamp01((t - t0) / 0.55));
+      const t0 = id === 'sun' ? 0.2 : 0.9 + i * 0.32;
+      const s = easeOutBack(clamp01((t - t0) / 0.8));
       b.mesh.scale.setScalar(Math.max(0.0001, s));
-      if (b.orbit) b.orbit.material.opacity = b.orbit.userData.baseOpacity * easeOut(clamp01((t - t0 - 0.2) / 0.6));
+      if (b.orbit) b.orbit.material.opacity = b.orbit.userData.baseOpacity * easeOut(clamp01((t - t0 - 0.3) / 1.0));
     });
     for (const f of fades) {
       const k = easeOut(clamp01((t - f.t0) / f.dur));

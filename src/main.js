@@ -98,9 +98,11 @@ function exoDetails(p) {
       ${p.massEarth ? `<dt>Masse</dt><dd>${fmt(p.massEarth, ' Erdmassen', 2)}</dd>` : ''}
       ${p.discoveryYear ? `<dt>Entdeckt</dt><dd>${p.discoveryYear}${p.method ? ' · ' + p.method : ''}</dd>` : ''}
       ${equilibriumK(STAR_L.get(p.host), p.aAu) ? `<dt>Temperatur (geschätzt)</dt><dd>≈ ${fmt(equilibriumK(STAR_L.get(p.host), p.aAu), ' K', 0)} <small>(${fmt(equilibriumK(STAR_L.get(p.host), p.aAu) - 273.15, ' °C', 0)})</small></dd>` : ''}
+      ${p.kind ? `<dt>Typ (Einordnung)</dt><dd>${p.kind}</dd>` : ''}
       <dt>Monde</dt><dd>keine bekannt</dd>
     </dl>
     <p class="muted small">Temperatur = Gleichgewichtstemperatur ohne Treibhauseffekt (Albedo 0,3 angenommen).
+    Aussehen und Typ sind eine Einordnung nach Größe und Temperatur – von diesem Planeten gibt es keine Aufnahme.
     Monde um Exoplaneten (Exomonde) sind bisher nirgends sicher nachgewiesen.</p>`;
 }
 
@@ -392,7 +394,7 @@ controls.innerHTML = `
     <label><input type="checkbox" data-layer="comets" checked /> Kometen</label>
     <label><input type="checkbox" data-layer="oort" checked /> Oortsche Wolke</label>
     <label><input type="checkbox" data-layer="planet9" checked /> Planet Neun?</label>
-    <label><input type="checkbox" data-layer="ref" /> Koordinatenkreuz</label>
+    <label><input type="checkbox" data-layer="ref" /> Himmelsgitter</label>
     </div>
   </div>
   <p class="vc-note" hidden>Maßstabsgetreue Abstände · Planeten vergrößert dargestellt</p>`;

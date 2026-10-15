@@ -645,3 +645,17 @@ input:focus-visible, canvas:focus-visible, .cesium-widget:focus-visible { outlin
     animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
   }
 }
+
+/* Drehpunkt-Anzeige (Systemansicht) */
+.pivot-chip {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 6;
+  display: inline-flex; align-items: center; gap: 10px; padding: 5px 6px 5px 12px; font-size: 12px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; backdrop-filter: blur(10px);
+}
+.pivot-chip[hidden] { display: none; }
+.pv-ico { width: 10px; height: 10px; border: 2px solid var(--accent); border-radius: 50%; }
+.pivot-chip button {
+  padding: 3px 10px; font: inherit; font-size: 11px; color: var(--text); background: var(--surface-strong);
+  border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+}
+.pivot-chip button:hover { border-color: var(--accent); }

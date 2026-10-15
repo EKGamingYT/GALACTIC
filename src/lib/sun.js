@@ -25,6 +25,8 @@ const fragment = /* glsl */ `
   #include <logdepthbuf_pars_fragment>
   uniform float uTime;
   uniform sampler2D uMap;
+  uniform vec3 uTint;      // Sternfarbe (andere Sterne); Sonne: Textur unverändert
+  uniform float uTintMix;  // 0 = Sonnentextur, 1 = in Sternfarbe umgefärbt
   varying vec2 vUv;
   varying vec3 vPos;
   varying vec3 vNormal;
@@ -65,6 +67,9 @@ const fragment = /* glsl */ `
     // Randverdunkelung
     float mu = clamp(dot(vNormal, vView), 0.0, 1.0);
     col *= 0.45 + 0.55 * pow(mu, 0.45);
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    // Farbe kräftiger (pow), sonst brennt der Bloom jeden Stern weiß-gelb aus
+    col = mix(col, lum * pow(uTint, vec3(1.6)) * 1.3, uTintMix);
     gl_FragColor = vec4(col * 1.9, 1.0); // HDR (> 1) → löst den Bloom-Glanz aus
     #include <colorspace_fragment>
   }
@@ -148,7 +153,7 @@ const coronaFragment = /* glsl */ `
 `;
 
 export function createSun(radius, map) {
-  const uniforms = { uTime: { value: 0 }, uMap: { value: map } };
+  const uniforms = { uTime: { value: 0 }, uMap: { value: map }, uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 } };
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 96, 48),
     new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment })
@@ -179,6 +184,7 @@ export function createSun(radius, map) {
   // Die Eigenrotation (mesh.rotation.y) setzt der Aufrufer aus dem simulierten Datum
   return {
     mesh,
+    time: uniforms.uTime, // gemeinsam genutzt von den Oberflächen der Nachbarsterne
     tick(seconds, camera) {
       uniforms.uTime.value = seconds;
       if (!camera) return;
@@ -190,4 +196,12 @@ export function createSun(radius, map) {
       coronaUniforms.uSize.value = (rr * d / Math.sqrt(d * d - rr * rr)) * span;
     },
   };
+}
+
+// Oberfläche eines anderen Sterns: gleicher Granulations-Shader wie die Sonne, in Sternfarbe umgefärbt
+export function createStarMaterial(map, color, timeUniform) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: timeUniform, uMap: { value: map }, uTint: { value: new THREE.Color(color) }, uTintMix: { value: 1 } },
+    vertexShader: vertex, fragmentShader: fragment,
+  });
 }
