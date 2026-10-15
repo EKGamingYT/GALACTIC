@@ -51,3 +51,5 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | Dienst | Verwendung | Hinweis |
 |---|---|---|
 | Vercel (Hobby-Plan) | Öffentliche Demo-URL | Nur Bereitstellung, kein Teil des Codes; Hobby-Plan nur für nicht-kommerzielle Nutzung |
+
+- Lokale Interstellare Wolke / G-Wolke: vereinfachte Kugel-Näherung nach Redfield & Linsky 2008, ApJ 673, 283 (schematisch). Galaktische Koordinaten: IAU-Definition (J2000-Rotationsmatrix).

@@ -19,6 +19,7 @@ import { createMoonSystems } from './moons.js';
 import { createSkybox } from '../lib/skybox.js';
 import { createStars } from './stars.js';
 import { createIntro } from './intro.js';
+import { createInterstellar } from './interstellar.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
 import { rotationPeriod } from '../data/rotation.js';
 import { TEXTURES } from '../data/textures.js';
@@ -50,12 +51,15 @@ const scaleRadius = (km) => Math.max(0.35, 0.22 * Math.pow(km / 1000, 0.45));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // Abstand r (AE) im aktuellen Überblendungszustand. Bis 1000 AE wie gehabt (Lehrbuch gestaucht,
-// Real linear); darüber logarithmisch weiter – sonst wären Oortsche Wolke und Nachbarsterne
-// (Hunderttausende AE) unbrauchbar weit weg: d(r) = d(1000 AE) · (1 + ln(r / 1000 AE)).
+// Real linear); 1000–50.000 AE logarithmisch (Übergang ins Interstellare); ab 50.000 AE streng
+// proportional – Nachbarsterne, Wolken und Ringe stehen dort maßstabsgetreu an ihren echten 3D-Positionen
+// (nur ein gemeinsamer Faktor, Abstandsverhältnisse und Richtungen exakt).
 const FAR_AU = 1000;
+const LIN_AU = 50000;
 const nearDistance = (au, blend) => lerp(compressed(au), linear(au), blend);
+const logDistance = (au, blend) => nearDistance(FAR_AU, blend) * (1 + Math.log(au / FAR_AU));
 export const sceneDistance = (au, blend) =>
-  au <= FAR_AU ? nearDistance(au, blend) : nearDistance(FAR_AU, blend) * (1 + Math.log(au / FAR_AU));
+  au <= FAR_AU ? nearDistance(au, blend) : au <= LIN_AU ? logDistance(au, blend) : logDistance(LIN_AU, blend) * (au / LIN_AU);
 export const AU_PER_LY = 63241.077;
 
 // Umkehrung (Szenenabstand → AE) per Bisektion, für die Positionsanzeige
@@ -92,7 +96,7 @@ const labelPriority = (body, layer) =>
 
 export function createSystemView(container, { onSelect }) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 5e6);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 2e9); // logarithmischer Tiefenpuffer → riesiger Bereich ok
   camera.position.set(0, 120, 170);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
@@ -122,7 +126,7 @@ export function createSystemView(container, { onSelect }) {
   controls.rotateSpeed = 0.7;
   controls.zoomSpeed = 1.3;
   controls.minDistance = 0.3;
-  controls.maxDistance = 600000;
+  controls.maxDistance = 6e7; // reicht im Real-Modus über 50 Lj hinaus
 
   // Echter Himmel (NASA SVS Deep Star Maps 2020, äquatorial). Orientierung geprüft: RA 0h in
   // Bildmitte, nach links zunehmend – nur so liegen galaktisches Zentrum, Cygnus und Carina hell.
@@ -241,6 +245,8 @@ export function createSystemView(container, { onSelect }) {
     },
   });
   if (import.meta.env.DEV) Object.assign(window, { __stars: stars, __camera: camera }); // nur lokales Testen
+  // Galaktische Ebene mit Entfernungsringen, Richtung galaktisches Zentrum, lokale interstellare Wolken
+  const interstellar = createInterstellar(scene, { sceneDistance, makeLabel: (text, cls, y) => makeLabel(text, cls, y) });
 
   // Weltposition eines Körpers, großen Mondes, Nachbarsterns oder Exoplaneten
   const worldPos = (id) => {
@@ -324,6 +330,7 @@ export function createSystemView(container, { onSelect }) {
     lastLightMs = date.getTime();
     moons.update(date, blend);
     stars.update(date, blend);
+    interstellar.update(blend);
     const jup = heliocentricPosition(bodies.get('jupiter').body, date);
     const jupLon = Math.atan2(jup.y, jup.x) / (Math.PI / 180);
     if (!geom) return;
@@ -510,7 +517,8 @@ export function createSystemView(container, { onSelect }) {
     if (want !== starView) {
       starView = want;
       starGroup.visible = want;
-      for (const [name, g] of Object.entries(layers)) g.visible = want ? false : layerOn[name] !== false;
+      for (const [name, g] of Object.entries(layers)) g.visible = (want ? name === 'oort' : true) && layerOn[name] !== false;
+      interstellar.group.visible = want;
       for (const b of bodies.values()) if (b.body.id !== 'sun') b.mesh.visible = !want;
       // Beschriftung „Sonne“ weicht in der Sternansicht dem Systemnamen
       const sunLabel = bodies.get('sun').mesh.children.find((c) => c.isCSS2DObject);

@@ -387,7 +387,7 @@ controls.innerHTML = `
       <button data-frame="35">Äußeres</button>
       <button data-frame="900" title="Bis zur Bahn von Sedna">Fern</button>
       <button data-frame="60000" title="Oortsche Wolke (bis 100.000 AE)">Oort</button>
-      <button data-frame="1500000" title="Ganz hinaus: Sonnensystem als Stern und Nachbarsterne">Sterne</button>
+      <button data-frame="2600000" title="Ganz hinaus: Nachbarsterne maßstabsgetreu bis 50 Lichtjahre">Sterne</button>
     </div>
   </div>
   <div class="vc-group">
