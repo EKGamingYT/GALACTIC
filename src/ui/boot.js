@@ -10,8 +10,8 @@
 import * as THREE from 'three';
 
 const MAX_MS = 15000;      // spätestens ~15 s nach Seitenaufruf fertig (Textur-Nachlader laufen im Hintergrund weiter)
-const HOLD_MS = 800;       // „System bereit“ kurz stehen lassen
-const CSS_RATE = 0.5;      // CSS-Zeitleiste (Uplink-Aufbau) in halbem Tempo → ≈ 4,3 s statt 2,15 s
+const HOLD_MS = 650;       // „System bereit“ kurz stehen lassen
+const CSS_RATE = 0.56;     // CSS-Zeitleiste (Uplink-Aufbau) gemächlich → ≈ 3,8 s statt 2,15 s
 const FADE_MS = 420;       // = Dauer der CSS-Blende in index.html
 const FADE_FAST_MS = 220;  // beim Überspringen
 const MIN_STATIC_MS = 600; // reduzierte Bewegung: mindestens so lange sichtbar
@@ -63,9 +63,9 @@ function start(root) {
   const quick = reduced ? 0 : 1;
   const steps = [
     // Mindestdauern je Zeile: genug, um mitzulesen (die App ist meist schneller fertig)
-    { key: 'cat', dur: 650 * quick },                                  // gebündelte Sterndaten sind mit dem Skript da
-    { key: 'orb', dur: 650 * quick, gate: () => ready },               // Bahnen entstehen beim Aufbau der Systemansicht
-    { key: 'tex', dur: 700 * quick, gate: () => ready && (skipped || texIdle()) },
+    { key: 'cat', dur: 580 * quick },                                  // gebündelte Sterndaten sind mit dem Skript da
+    { key: 'orb', dur: 580 * quick, gate: () => ready },               // Bahnen entstehen beim Aufbau der Systemansicht
+    { key: 'tex', dur: 620 * quick, gate: () => ready && (skipped || texIdle()) },
     { key: 'go', dur: 500 * quick, gate: () => !reduced || performance.now() - t0 >= MIN_STATIC_MS },
   ].map((s) => ({ ...s, t: 0, el: root.querySelector(`[data-s="${s.key}"]`) }));
   const texInfo = steps[2].el.querySelector('.bt-i');
@@ -168,7 +168,6 @@ function start(root) {
     tick(); // wartet nur noch auf „bereit“ – Texturen laden im Hintergrund weiter
   }
   const onKey = (e) => { if (e.key === 'Escape') skip(); };
-  root.addEventListener('click', skip);
   window.addEventListener('keydown', onKey);
 
   // --- App bereit (main.js, nach dem ersten route()) ------------------------------------------------------

@@ -5,8 +5,12 @@ import {
   Viewer, Globe, Ellipsoid, ImageryLayer, UrlTemplateImageryProvider, GeographicTilingScheme, GridImageryProvider,
   ScreenSpaceEventHandler, ScreenSpaceEventType, SceneMode, Math as CesiumMath,
   Credit, Color, Cartesian3, Ion, Rectangle, WebMercatorTilingScheme, SingleTileImageryProvider, DirectionalLight,
-  Primitive, GeometryInstance, EllipsoidGeometry, MaterialAppearance, Material, SkyBox,
+  Primitive, GeometryInstance, EllipsoidGeometry, MaterialAppearance, Material, SkyBox, RequestScheduler,
 } from 'cesium';
+
+// Mehr gleichzeitige Kachel-Anfragen je Server (Standard 6) → Karten werden beim Zoomen deutlich schneller scharf
+RequestScheduler.maximumRequestsPerServer = 18;
+RequestScheduler.maximumRequests = 64;
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import '../map.css';
 import { createTerrariumTerrain } from '../lib/terrarium.js';
@@ -179,9 +183,12 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     const { camera } = scene;
     const { globe, canvas } = scene;
     globe.baseColor = Color.fromCssColorString('#1c2230'); // dezent statt schwarz
-    // Schärfere Kacheln (v. a. Straßen-/Topokarte mit Schrift) und größerer Kachel-Cache
-    globe.maximumScreenSpaceError = 1.5;
-    globe.tileCacheSize = 400;
+    // Kachel-Schärfe wie Cesium-Standard (1,5 lud ~75 % mehr Kacheln → spürbar langsameres Scharfstellen),
+    // dafür mehr parallel nachladen und einen großen Cache, damit Zurückzoomen sofort scharf ist
+    globe.maximumScreenSpaceError = 2;
+    globe.loadingDescendantLimit = 60;
+    globe.preloadAncestors = true;
+    globe.tileCacheSize = 1000;
     globe.showGroundAtmosphere = isEarth;
     if (!isEarth) { if (scene.sun) scene.sun.show = false; if (scene.moon) scene.moon.show = false; }
 
