@@ -230,7 +230,7 @@ export function createSystemView(container, { onSelect }) {
       return l;
     },
   });
-  // --- Nachbarsterne (≤ 20 Lj) mit Exoplaneten ---------------------------------------------
+  // --- Nachbarsterne (bis ~50 Lj) mit Exoplaneten ---------------------------------------------
   const stars = createStars(scene, {
     sceneDistance, nearDistance, glowTexture,
     starMaterial: (color) => createStarMaterial(sunMap, color, sun.time),
@@ -537,6 +537,52 @@ export function createSystemView(container, { onSelect }) {
     const hit = raycaster.intersectObjects([...[...bodies.values()].map((b) => b.mesh), ...moons.meshes(), ...stars.meshes()], false)[0];
     if (hit) pick(hit.object.userData.body);
   });
+  // Hover: Zeiger + kleines Namensschild über allem, was anklickbar ist (nur Maus)
+  const tip = document.createElement('div');
+  tip.className = 'hover-tip';
+  tip.hidden = true;
+  container.appendChild(tip);
+  let hoverEv = null, hoverRaf = 0;
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse' || e.buttons) { tip.hidden = true; return; }
+    hoverEv = e;
+    if (!hoverRaf) hoverRaf = requestAnimationFrame(() => {
+      hoverRaf = 0;
+      const ev = hoverEv;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+      const body = raycaster.intersectObjects([...[...bodies.values()].map((b) => b.mesh), ...moons.meshes(), ...stars.meshes()], false)[0]?.object.userData.body;
+      renderer.domElement.style.cursor = body ? 'pointer' : '';
+      tip.hidden = !body;
+      if (!body) return;
+      tip.innerHTML = `<strong>${body.name}</strong><small>${body.kind ?? body.type ?? ''}</small>`;
+      tip.style.setProperty('--c', body.color || '#6ea8ff');
+      tip.style.transform = `translate(${ev.clientX - rect.left + 14}px, ${ev.clientY - rect.top + 14}px)`;
+    });
+  });
+  renderer.domElement.addEventListener('pointerleave', () => { tip.hidden = true; renderer.domElement.style.cursor = ''; });
+  renderer.domElement.addEventListener('pointerdown', () => (tip.hidden = true));
+
+  // Steuerungshinweis (verschwindet nach der ersten Bedienung bzw. nach einiger Zeit)
+  const hint = document.createElement('div');
+  hint.className = 'nav-hint';
+  hint.innerHTML = matchMedia('(pointer: coarse)').matches
+    ? '<span><b>Wischen</b> drehen</span><span><b>Zwei Finger</b> zoomen</span><span><b>Tippen</b> hinfliegen</span>'
+    : '<span><b>Ziehen</b> drehen</span><span><b>Mausrad</b> zoomen</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fliegen</span><span><b>Klick</b> hinfliegen</span>';
+  hint.classList.add('gone');
+  container.appendChild(hint);
+  let hintUsed = false;
+  const dismissHint = () => { hintUsed = true; hint.classList.add('gone'); };
+  // erst nach dem Intro einblenden, nach ~9 s von selbst wieder weg
+  window.addEventListener('galactic:intro', () => setTimeout(() => {
+    if (hintUsed) return;
+    hint.classList.remove('gone');
+    setTimeout(dismissHint, 9000);
+  }, 8800), { once: true });
+  controls.addEventListener('start', () => setTimeout(dismissHint, 2500), { once: true });
+  window.addEventListener('keydown', (e) => { if (FLY_KEYS[e.code]) setTimeout(dismissHint, 2500); });
+
   renderer.domElement.addEventListener('dblclick', (e) => {
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
@@ -590,11 +636,18 @@ export function createSystemView(container, { onSelect }) {
     const r = meshRadius(mesh);
     const isMoon = !bodies.has(bodyId);
     // Monde: dicht heran (der Planet bleibt im Hintergrund sichtbar); Planeten: ganzes Mondsystem im Bild
+    // näher heran als früher: der Körper füllt gut ein Drittel des Bildes, Mondsysteme bleiben im Blick
     const back = stars.get(bodyId) ? Math.max(r * 8, stars.extent(bodyId) * 2.4)
-      : isMoon ? r * 7 + 0.2 : Math.max(r * 8 + 10, moons.extent(bodyId) * 2.2);
+      : isMoon ? r * 4 + 0.05 : Math.max(r * 4.5 + 1.2, moons.extent(bodyId) * 1.5);
     controls.minDistance = Math.max(0.02, r * 1.3);
     const target = worldPos(bodyId);
     const dir = camera.position.clone().sub(target).normalize();
+    // Planeten/Monde/Exoplaneten von der beleuchteten Seite anfliegen (Licht: Sonne bzw. eigener Stern)
+    if (bodyId !== 'sun' && !stars.get(bodyId)) {
+      const light = stars.hostPos(bodyId) ?? new THREE.Vector3();
+      const toLight = light.sub(target).normalize();
+      dir.multiplyScalar(0.45).addScaledVector(toLight, 1).normalize();
+    }
     dir.y = Math.max(dir.y, 0) + 0.35; // leicht von oben, damit Bahnen/Mondsysteme sichtbar sind
     flyTo(target.clone().addScaledVector(dir.normalize(), back + r * 2), target, bodyId);
   }
@@ -798,6 +851,8 @@ export function createSystemView(container, { onSelect }) {
       update();
     },
     getDate: () => date,
+    exoplanet: (id) => stars.focusMesh(id)?.userData.body ?? null, // Körperdaten eines Exoplaneten
+
     setRealMode(real) {
       blendTarget = real ? 1 : 0;
       frame(52); // Überblick bis zum Kuipergürtel

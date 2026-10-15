@@ -7,7 +7,7 @@ import { SMALL_BODIES } from './views/system.js';
 import { moonBodies } from './views/moons.js';
 import { STARS, starBody } from './views/stars.js';
 import { SYSTEMS } from './data/systems.js';
-import { createSystemPicker } from './ui/systemPicker.js';
+import { createSystemPicker, MAX_LY } from './ui/systemPicker.js';
 import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
@@ -83,8 +83,8 @@ function starDetails(s) {
       ${members.length ? `<dt>Im System mit</dt><dd>${members.join(', ')}</dd>` : ''}
       <dt>Bekannte Planeten</dt><dd>${planets.length}</dd>
     </dl>
-    ${planets.length ? `<ul class="planet-list">${planets.map((p) => `<li><strong>${p.name}</strong>
-      <small>${p.aAu ? fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${p.discoveryYear ? ' · entdeckt ' + p.discoveryYear : ''}</small></li>`).join('')}</ul>` : ''}`;
+    ${planets.length ? `<p class="eyebrow">Planeten</p><ul class="member-list">${planets.map((p) => `<li><button data-planet="planet-${s.id}-${p.name}"><i style="background:${system.exoplanet(`planet-${s.id}-${p.name}`)?.color ?? '#9aa7b8'}"></i>
+      <span><strong>${p.name}</strong><small>${p.aAu ? fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${p.discoveryYear ? ' · entdeckt ' + p.discoveryYear : ''}</small></span></button></li>`).join('')}</ul>` : ''}`;
 }
 
 function exoDetails(p) {
@@ -246,18 +246,32 @@ function showStarSystemPanel(sys) {
         <dt>Planeten</dt><dd>${(m.planets || []).length}</dd>
       </dl>`).join('')}
     ${sys.planets.length ? `<p class="eyebrow">Planeten</p>
-    <ul class="planet-list">${sys.planets.map((p) => `<li><strong>${p.name}</strong>${p.inHz ? ' <span class="sp-badge">HZ</span>' : ''}
-      <small>um ${p.host}${p.aAu ? ' · ' + fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : ''}${p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${equilibriumK(STAR_L.get(p.host), p.aAu) ? ' · ≈ ' + fmt(equilibriumK(STAR_L.get(p.host), p.aAu) - 273.15, ' °C', 0) : ''}${p.discoveryYear ? ' · ' + p.discoveryYear : ''}${p.method ? ' (' + p.method + ')' : ''}</small></li>`).join('')}</ul>` : ''}
+    <ul class="member-list">${sys.planets.map((p) => `<li><button data-planet="${exoId(p)}"><i style="background:${system.exoplanet(exoId(p))?.color ?? '#9aa7b8'}"></i>
+      <span><strong>${p.name}${p.inHz ? ' <span class="sp-badge">HZ</span>' : ''}</strong>
+      <small>um ${p.host}${p.aAu ? ' · ' + fmt(p.aAu, ' AE', 3) : ''}${p.periodDays ? ' · ' + fmt(p.periodDays, ' Tage', 1) : ''}${p.radiusEarth ? ' · ' + fmt(p.radiusEarth, ' R⊕', 2) : ''}${p.massEarth ? ' · ' + fmt(p.massEarth, ' M⊕', 2) : ''}${equilibriumK(STAR_L.get(p.host), p.aAu) ? ' · ≈ ' + fmt(equilibriumK(STAR_L.get(p.host), p.aAu) - 273.15, ' °C', 0) : ''}${p.discoveryYear ? ' · ' + p.discoveryYear : ''}${p.method ? ' (' + p.method + ')' : ''}</small></span></button></li>`).join('')}</ul>` : ''}
     <p class="eyebrow">Monde</p>
     <p class="muted small">Keine bekannt – Monde um Exoplaneten (Exomonde) sind bisher nirgends sicher nachgewiesen.</p>
     <div class="actions"><button data-act="focus">Heranfliegen</button></div>
     <p class="muted small">Quellen: CDS SIMBAD, NASA Exoplanet Archive. Leuchtkraft mit „≈“ geschätzt aus Helligkeit,
     Parallaxe und Spektraltyp; habitable Zone (konservativ) nach Kopparapu et al. – Näherung.</p>`);
   panel.querySelector('[data-act="focus"]').onclick = () => system.focus(sys.primaryId);
+  wirePlanetButtons();
   panel.querySelectorAll('[data-star]').forEach((b) => (b.onclick = () => {
     const s = STARS.find((x) => x.id === b.dataset.star);
     selectBody(starBody(s));
     system.focus(s.id);
+  }));
+}
+
+// Exoplaneten-ID wie in der 3D-Ansicht (Stern-ID + Planetenname)
+const exoId = (p) => `planet-${STARS.find((s) => s.name === p.host)?.id}-${p.name}`;
+// Planetenknöpfe in Stern-/Systempanels: auswählen und hinfliegen
+function wirePlanetButtons() {
+  panel.querySelectorAll('[data-planet]').forEach((b) => (b.onclick = () => {
+    const body = system.exoplanet(b.dataset.planet);
+    if (!body) return;
+    selectBody(body);
+    system.focus(body.id);
   }));
 }
 
@@ -289,6 +303,7 @@ function selectBody(body) {
       : 'Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)'}</p>`);
   panel.querySelector('[data-act="focus"]')?.addEventListener('click', () => system.focus(body.id));
   wireMoonChips();
+  wirePlanetButtons();
   updatePanelLive();
 }
 
@@ -407,7 +422,7 @@ const setCollapsed = (c) => {
   vcToggle.setAttribute('aria-expanded', String(!c));
 };
 vcToggle.onclick = () => setCollapsed(!controls.classList.contains('collapsed'));
-setCollapsed(window.matchMedia('(max-width: 720px)').matches);
+setCollapsed(true); // eingeklappt starten – freie Sicht aufs System, Einstellungen per Klick
 controls.querySelectorAll('[data-orbit]').forEach((b) => (b.onclick = () => {
   const real = b.dataset.orbit === 'real';
   system.setRealMode(real);
@@ -435,10 +450,11 @@ $('.topbar .nav').after(search);
 const sysBtn = document.createElement('button');
 sysBtn.className = 'sys-btn';
 sysBtn.innerHTML = '<span class="sys-ico"></span><span class="sys-label">Sternsysteme</span>';
-sysBtn.title = 'Sternsysteme bis 20 Lichtjahre';
+sysBtn.title = `Sternsysteme bis ${MAX_LY} Lichtjahre`;
 sysBtn.setAttribute('aria-label', 'Sternsysteme');
 sysBtn.setAttribute('aria-expanded', 'false');
 search.before(sysBtn);
+sysBtn.addEventListener('click', () => setCollapsed(true)); // Auswahlliste und Ansicht-Menü nicht übereinander
 createSystemPicker(sysBtn, {
   solarSystem: SOLAR_SYSTEM,
   onPick: (s) => {

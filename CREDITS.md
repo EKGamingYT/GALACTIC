@@ -29,7 +29,8 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | NASA Sun Fact Sheet; Kopparapu et al. 2013/2014; GRAVITY Collaboration 2019; Bennett & Bovy 2019; IERS ICRF3 | Sonnensystem-Panel, habitable Zone, Lage in der Milchstraße, Koordinatenkreuz | wissenschaftliche Veröffentlichungen / NASA |
 | NASA Goddard SVS – Deep Star Maps 2020 (svs.gsfc.nasa.gov/4851), Gaia DR2: ESA/Gaia/DPAC | Echter Sternenhimmel im Hintergrund | NASA (frei); Gaia-Daten ESA/Gaia/DPAC (CC BY-SA 3.0 IGO) – Credit siehe public/textures/SOURCES.md |
 | USGS Astrogeology / NASA – Voyager-2-, New-Horizons-, Viking-Globalmosaike (Triton, Charon, Miranda, Ariel, Umbriel, Titania, Oberon, Deimos) | Mondoberflächen | gemeinfrei (USGS/NASA), Details in public/textures/SOURCES.md |
-| CDS SIMBAD (simbad.cds.unistra.fr) | Nachbarsterne ≤ 20 Lj: Positionen, Parallaxen, Spektraltypen | CDS, Strasbourg (frei für wissenschaftliche Nutzung, Zitierhinweis) |
+| CDS SIMBAD (simbad.cds.unistra.fr) – Wenger et al. 2000, A&AS 143, 9 | Nachbarsterne bis 50 Lj: Positionen, Spektraltypen, Helligkeiten, Mehrfachsysteme | CDS, Strasbourg (frei für wissenschaftliche Nutzung, Zitierhinweis) |
+| ESA Gaia DR3 (gea.esac.esa.int) – Gaia Collaboration 2023, A&A 674, A1 | Parallaxen/Entfernungen der Nachbarsterne, Vollständigkeitsprüfung | ESA/Gaia/DPAC, CC BY-SA 3.0 IGO – die daraus abgeleiteten Werte in `src/data/nearbystars.json` stehen ebenfalls unter CC BY-SA 3.0 IGO |
 | NASA Exoplanet Archive (exoplanetarchive.ipac.caltech.edu) | Exoplaneten der Nachbarsterne | NASA/Caltech-IPAC |
 | Brown & Batygin 2021 (AJ 162, 219) | Hypothetische Bahn von Planet Neun | wissenschaftliche Veröffentlichung |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |

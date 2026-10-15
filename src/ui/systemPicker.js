@@ -1,6 +1,8 @@
-// Auswahl aller Sternsysteme (Sonnensystem + Nachbarn ≤ 20 Lj) als Seitenleiste:
+// Auswahl aller Sternsysteme (Sonnensystem + Nachbarn bis MAX_LY) als Seitenleiste:
 // Suche, Filter (alle / mit Planeten / Mehrfachsysteme), sortiert nach Entfernung.
 import { SYSTEMS } from '../data/systems.js';
+// Reichweite des Katalogs, auf volle 10 Lj aufgerundet
+export const MAX_LY = Math.ceil(Math.max(...SYSTEMS.map((s) => s.distanceLy || 0)) / 10) * 10;
 
 const fmtLy = (ly) => (ly === 0 ? 'hier' : `${ly.toLocaleString('de-DE', { maximumFractionDigits: 2 })} Lj`);
 const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -20,7 +22,7 @@ export function createSystemPicker(button, { solarSystem, onPick }) {
       <div>
         <p class="eyebrow">Sternsysteme</p>
         <h2>Sonnenumgebung</h2>
-        <p class="muted small">${all.length} Systeme bis 20 Lichtjahre · nach Entfernung</p>
+        <p class="muted small">${all.length} Systeme bis ${MAX_LY} Lichtjahre · nach Entfernung</p>
       </div>
       <button class="close" aria-label="Schließen" title="Schließen (Esc)">×</button>
     </header>

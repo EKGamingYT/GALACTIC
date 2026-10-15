@@ -1,4 +1,4 @@
-// Nachbarsterne (≤ 20 Lichtjahre) mit ihren bekannten Exoplaneten.
+// Nachbarsterne (Katalog bis ~50 Lichtjahre) mit ihren bekannten Exoplaneten.
 // Richtung exakt aus RA/Dec (ICRS), Entfernung über den gemeinsamen Maßstab
 // (jenseits von 1000 AE logarithmisch). Fliegt man an einen Stern heran,
 // erscheinen seine Planetenbahnen (Bahnlage/-phase meist unbekannt → schematisch).
@@ -43,6 +43,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
   scene.add(group);
   const items = new Map();
   const planetMeshes = new Map(); // Exoplaneten-ID → Mesh
+  const planetHost = new Map();   // Exoplaneten-ID → Stern-ID
   const glow = glowTexture();
 
   for (const s of STARS) {
@@ -56,7 +57,10 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glow, color: body.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false,
     }));
-    sprite.scale.setScalar(Math.min(0.06, 0.012 + 0.008 * Math.log10(1 + lum * 30)));
+    // Punktgröße nach scheinbarer Helligkeit (wie am Himmel): hell = groß, schwach = winzig
+    const size = s.vmag != null ? 0.026 * Math.pow(10, -0.06 * (s.vmag - 2)) : 0.008 + 0.006 * Math.log10(1 + lum * 30);
+    sprite.scale.setScalar(Math.min(0.045, Math.max(0.005, size)));
+    if (s.vmag > 9) sprite.material.opacity = Math.max(0.45, 1 - (s.vmag - 9) * 0.08);
     node.add(sprite);
     // kleine Kugel für die Nahansicht
     // Nahansicht: kleine, überhelle Kugel (HDR-Farbe > 1 → leuchtet im Bloom wie ein Stern)
@@ -103,6 +107,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       mesh.userData.body = planetBody;
       const hit = hitProxy(mesh);
       planetMeshes.set(planetBody.id, mesh);
+      planetHost.set(planetBody.id, s.id);
       const pl = makeLabel(p.name, 'minor-label', pr + 0.2, planetBody);
       mesh.add(pl);
       sys.add(orbit, mesh);
@@ -128,6 +133,15 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     primary.systemLabel = lbl;
     for (const m of sysInfo.members) { const it = items.get(m.id); if (it) it.inMulti = sysInfo.primaryId; }
   }
+
+  // Aus der Ferne beschriftet werden nur die ~45 wichtigsten Systeme (beschrieben, mit Planeten, hell, nah) –
+  // bei über 1000 Systemen wäre jede andere Regel ein Namensteppich
+  const LABEL_BUDGET = 45;
+  const score = (x) => (x.description || x.members.some((m) => m.description) ? 4 : 0) + Math.min(3, x.planets.length) * 0.8
+    + Math.max(0, 3 - Math.min(...x.members.map((m) => m.vmag ?? 20)) / 2) + 12 / Math.max(4, x.distanceLy);
+  [...SYSTEMS].sort((a, b) => score(b) - score(a)).forEach((sysInfo, rank) => {
+    for (const m of sysInfo.members) { const it = items.get(m.id); if (it) it.major = rank < LABEL_BUDGET; }
+  });
 
   // Position abhängig von Lehrbuch/Real; Planetenbahnen im selben Nahmaßstab wie unser System
   let ringBlend = null;
@@ -178,26 +192,38 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
   // (im System selbst stecken sie schon im echten Himmelshintergrund, doppelt wäre nur Unruhe)
   const tmp = new THREE.Vector3();
   function updateVisibility(camera, starView, selectedId, farOut) {
+    // Ist ein Sternsystem (Stern/Exoplanet) gewählt und die Kamera dort, gehört die Bühne nur ihm:
+    // durch den logarithmischen Maßstab liegen fremde Systeme in derselben Richtung sonst mitten im Bild
+    const focusIt = items.get(planetHost.get(selectedId) ?? selectedId);
+    const inFocus = focusIt && camera.position.distanceTo(focusIt.node.position) < focusIt.extent * 30;
     for (const it of items.values()) {
       const dist = camera.position.distanceTo(it.node.position);
+      if (inFocus && it.s.system !== focusIt.s.system) {
+        // ganz ausblenden – der echte Himmelshintergrund zeigt diese Sterne ohnehin
+        it.node.visible = it.sys.visible = it.sphere.visible = it.label.visible = false;
+        if (it.systemLabel) it.systemLabel.visible = false;
+        continue;
+      }
       const near = dist < it.extent * 8;
       it.node.visible = farOut || near || selectedId === it.body.id;
       it.sys.visible = near || selectedId === it.body.id;
-      // Aus der Ferne nur bekannte Sterne beschriften, die übrigen erst beim Heranfliegen
-      const major = !!it.s.description;
-      const close = dist < it.node.position.length() * 0.35;
+      // Aus der Ferne nur bekannte Sterne beschriften (Beschreibung, Planeten oder ≤ 15 Lj), die übrigen erst beim Heranfliegen
+      const major = it.major;
+      const close = dist < it.extent * 25; // wirklich herangeflogen
       const sel = selectedId === it.body.id;
       if (it.inMulti) {
         // Mitglieder eines Mehrfachsystems: aus der Ferne nur der Systemname, nah dran die Einzelsterne
         it.label.visible = close || near || sel;
-        if (it.systemLabel) it.systemLabel.visible = starView && !close && !near && !sel;
+        if (it.systemLabel) it.systemLabel.visible = starView && it.major && !close && !near && !sel;
       } else {
         it.label.visible = (starView && major) || close || near || sel;
       }
       it.sphere.visible = dist < it.extent * 40;
       // Trefferkugeln: etwa 14 px auf dem Bildschirm, nie kleiner als der Körper selbst
       const px = 0.012 * Math.tan((camera.fov * Math.PI) / 360) * 2;
-      for (const h of [it.sphereHit, ...it.planets.map((q) => q.hit)]) {
+      // (nur für gerade Sichtbares – bei ~1500 Sternen spart das viel Rechenzeit pro Bild)
+      const hits = [...(it.sphere.visible ? [it.sphereHit] : []), ...(it.sys.visible ? it.planets.map((q) => q.hit) : [])];
+      for (const h of hits) {
         const d = camera.position.distanceTo(h.parent.getWorldPosition(tmp));
         h.scale.setScalar(Math.max(h.userData.radius, (d * px) / h.parent.scale.x));
       }
@@ -216,6 +242,8 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     // Ziel für Kameraflüge: Mesh (für die Größe) und Weltposition
     focusMesh: (id) => items.get(id)?.sphere ?? planetMeshes.get(id),
     extent: (id) => items.get(id)?.extent ?? 0,
+    // Weltposition des Muttersterns eines Exoplaneten (sonst null)
+    hostPos: (id) => (planetHost.has(id) ? items.get(planetHost.get(id)).node.position.clone() : null),
     bodies: () => [...items.values()].map((it) => it.body),
   };
 }

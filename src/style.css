@@ -659,3 +659,47 @@ input:focus-visible, canvas:focus-visible, .cesium-widget:focus-visible { outlin
   border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
 }
 .pivot-chip button:hover { border-color: var(--accent); }
+
+/* --- Hover-Schild über anklickbaren Körpern ------------------------------------------------ */
+.hover-tip {
+  position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none;
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 6px 12px;
+  background: rgba(8, 13, 28, 0.88); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-left: 3px solid var(--c, var(--accent)); white-space: nowrap;
+}
+.hover-tip[hidden] { display: none; }
+.hover-tip strong { font-size: 12.5px; font-weight: 600; color: #fff; }
+.hover-tip small { font-size: 11px; color: var(--muted); }
+
+/* --- Steuerungshinweis ------------------------------------------------------------------- */
+.nav-hint {
+  position: absolute; left: 50%; bottom: 140px; z-index: 5; transform: translateX(-50%);
+  display: flex; gap: 14px; padding: 8px 16px; pointer-events: none;
+  font-size: 12px; color: var(--text-2); white-space: nowrap;
+  background: rgba(8, 13, 28, 0.62); border: 1px solid var(--line-soft); border-radius: 999px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: opacity 0.8s ease, transform 0.8s var(--ease);
+}
+.nav-hint.gone { opacity: 0; transform: translate(-50%, 8px); }
+.nav-hint b { font-weight: 600; color: #fff; }
+.nav-hint kbd {
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-right: 2px; padding: 0 3px;
+  font: 600 10px/1 ui-monospace, Consolas, monospace; color: #fff;
+  border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.05);
+}
+@media (max-width: 720px) { .nav-hint { bottom: 176px; gap: 10px; font-size: 11px; padding: 7px 12px; } }
+
+/* Listen-Knöpfe: Pfeil zeigt „hinfliegen“ an */
+.member-list button { position: relative; }
+.member-list button::after {
+  content: '→'; margin-left: auto; padding-left: 8px; align-self: center; color: var(--accent);
+  opacity: 0; transform: translateX(-4px); transition: opacity 0.18s, transform 0.18s var(--ease);
+}
+.member-list button:hover::after, .member-list button:focus-visible::after { opacity: 1; transform: none; }
+
+/* Drehpunkt-Schild: sanft einblenden, leichter Schein */
+.pivot-chip { box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(110, 168, 255, 0.06); animation: chip-in 0.35s var(--ease); }
+.pv-ico { box-shadow: 0 0 8px rgba(110, 168, 255, 0.6); }
+@keyframes chip-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+@media (prefers-reduced-motion: reduce) { .pivot-chip { animation: none; } }

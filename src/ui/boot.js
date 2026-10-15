@@ -4,14 +4,14 @@
 // Dieses Modul
 //   1. koppelt die Statuszeilen „Sternkatalog … System bereit“ an echte Fortschritte
 //      (THREE.DefaultLoadingManager für die Texturen, Ereignis „galactic:ready“ aus main.js),
-//   2. beschleunigt die CSS-Zeitleiste, falls die App früher fertig ist (nie mehr als ~1,5 s Wartezeit nach „bereit“),
+//   2. spielt die CSS-Zeitleiste in ruhigem Tempo ab (CSS_RATE) und lässt jede Statuszeile lange genug stehen,
 //   3. blendet den Schirm aus und löst danach genau einmal „galactic:intro“ aus (system.js startet die Kamerafahrt),
 //   4. erlaubt Überspringen per Klick/Tipp oder Esc – auch bei reduzierter Bewegung (dort kurze statische Version).
 import * as THREE from 'three';
 
-const MAX_MS = 10000;      // spätestens ~10 s nach Seitenaufruf fertig (Textur-Nachlader laufen im Hintergrund weiter)
-const CSS_BUDGET_MS = 250; // ist die App bereit: Rest der CSS-Zeitleiste in höchstens so langer Zeit abspielen
-const HOLD_MS = 100;       // „System bereit“ kurz stehen lassen
+const MAX_MS = 15000;      // spätestens ~15 s nach Seitenaufruf fertig (Textur-Nachlader laufen im Hintergrund weiter)
+const HOLD_MS = 800;       // „System bereit“ kurz stehen lassen
+const CSS_RATE = 0.5;      // CSS-Zeitleiste (Uplink-Aufbau) in halbem Tempo → ≈ 4,3 s statt 2,15 s
 const FADE_MS = 420;       // = Dauer der CSS-Blende in index.html
 const FADE_FAST_MS = 220;  // beim Überspringen
 const MIN_STATIC_MS = 600; // reduzierte Bewegung: mindestens so lange sichtbar
@@ -62,10 +62,11 @@ function start(root) {
   // --- Statuszeilen der JS-Phase ----------------------------------------------------------------
   const quick = reduced ? 0 : 1;
   const steps = [
-    { key: 'cat', dur: 100 * quick },                                  // gebündelte Sterndaten sind mit dem Skript da
-    { key: 'orb', dur: 100 * quick, gate: () => ready },               // Bahnen entstehen beim Aufbau der Systemansicht
-    { key: 'tex', dur: 100 * quick, gate: () => ready && (skipped || texIdle()) },
-    { key: 'go', dur: 160 * quick, gate: () => !reduced || performance.now() - t0 >= MIN_STATIC_MS },
+    // Mindestdauern je Zeile: genug, um mitzulesen (die App ist meist schneller fertig)
+    { key: 'cat', dur: 650 * quick },                                  // gebündelte Sterndaten sind mit dem Skript da
+    { key: 'orb', dur: 650 * quick, gate: () => ready },               // Bahnen entstehen beim Aufbau der Systemansicht
+    { key: 'tex', dur: 700 * quick, gate: () => ready && (skipped || texIdle()) },
+    { key: 'go', dur: 500 * quick, gate: () => !reduced || performance.now() - t0 >= MIN_STATIC_MS },
   ].map((s) => ({ ...s, t: 0, el: root.querySelector(`[data-s="${s.key}"]`) }));
   const texInfo = steps[2].el.querySelector('.bt-i');
 
@@ -81,9 +82,11 @@ function start(root) {
     if (!tex.seen) return tex.started ? '…' : '';
     return `${Math.min(tex.loaded, tex.total)}/${tex.total}`;
   };
+  const pc = root.querySelector('#boot-pc');
   const setBar = (v) => {
     shown = Math.max(shown, Math.min(1, v));
     bar.style.setProperty('--p', shown.toFixed(3));
+    if (pc) pc.textContent = `${Math.round(shown * 100)} %`;
   };
 
   function begin(k) {
@@ -173,11 +176,6 @@ function start(root) {
     const go = () => {
       if (ready) return;
       ready = true;
-      // früher fertig als die CSS-Zeitleiste? Dann den Rest zügig abspielen
-      if (clock && !cssDone()) {
-        const rest = cssEnd - (clock.currentTime ?? 0);
-        if (rest > CSS_BUDGET_MS) cssRate(rest / CSS_BUDGET_MS);
-      }
     };
     // erst nach zwei gezeichneten Bildern (wie bisher); Rückfall-Timer, falls der Tab im Hintergrund keine Frames bekommt
     requestAnimationFrame(() => requestAnimationFrame(go));
@@ -196,6 +194,7 @@ function start(root) {
   }, Math.max(2500, MAX_MS - t0));
 
   // --- los ----------------------------------------------------------------------------------------------------
+  if (!reduced) cssRate(CSS_RATE);
   root.classList.add('run');
   setBar(0);
   let raf = 0;
