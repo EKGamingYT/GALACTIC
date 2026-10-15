@@ -27,6 +27,8 @@ const fragment = /* glsl */ `
   uniform sampler2D uMap;
   uniform vec3 uTint;      // Sternfarbe (andere Sterne); Sonne: Textur unverändert
   uniform float uTintMix;  // 0 = Sonnentextur, 1 = in Sternfarbe umgefärbt
+  uniform vec4 uKind;      // x: Zellgröße, y: Konvektion (0 glatt … 1 brodelnd), z: Fleckenanteil, w: Wolkenbänder (Braune Zwerge)
+  uniform float uBright;   // Gesamthelligkeit (Weiße Zwerge heller, Braune Zwerge dunkel)
   varying vec2 vUv;
   varying vec3 vPos;
   varying vec3 vNormal;
@@ -49,12 +51,12 @@ const fragment = /* glsl */ `
 
   void main() {
     #include <logdepthbuf_fragment>
-    vec3 p = normalize(vPos) * 3.2;
+    vec3 p = normalize(vPos) * 3.2 * uKind.x;
     float t = uTime * 0.04;
     // zwei Rauschschichten, gegeneinander verschoben → wabernde Granulation
     float n = fbm(p + vec3(t, -t * 0.7, t * 0.4));
     float cells = fbm(p * 3.5 - vec3(t * 1.6));
-    float heat = clamp(n * 0.65 + cells * 0.45, 0.0, 1.0);
+    float heat = mix(0.55, clamp(n * 0.65 + cells * 0.45, 0.0, 1.0), uKind.y);
     // echte Sonnentextur, durch das Rauschen leicht verzerrt → „kochende“ Oberfläche
     vec2 warp = vec2(n - 0.5, cells - 0.5) * 0.012;
     vec3 tex = texture2D(uMap, vUv + warp).rgb;
@@ -62,15 +64,18 @@ const fragment = /* glsl */ `
     col = mix(col, vec3(1.0, 0.85, 0.45), heat * 0.25);
     col = mix(col, vec3(1.0, 0.97, 0.85), pow(heat, 4.0));
     // Sonnenflecken (selten, dunkel)
-    float spot = smoothstep(0.72, 0.8, fbm(p * 0.9 + vec3(7.0, t * 0.2, 3.0)));
-    col *= 1.0 - spot * 0.55;
+    float spot = smoothstep(0.8 - uKind.z * 0.25, 0.86 - uKind.z * 0.25, fbm(p * 0.9 + vec3(7.0, t * 0.2, 3.0)));
+    col *= 1.0 - spot * (0.4 + uKind.z * 0.25);
+    // Braune Zwerge: Wolkenbänder wie bei Gasriesen statt Granulation
+    float bands = 0.5 + 0.5 * sin(normalize(vPos).y * 22.0 + fbm(p * 1.5 + vec3(t * 0.3)) * 4.0);
+    col *= mix(1.0, 0.55 + 0.6 * bands, uKind.w);
     // Randverdunkelung
     float mu = clamp(dot(vNormal, vView), 0.0, 1.0);
     col *= 0.45 + 0.55 * pow(mu, 0.45);
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
     // Farbe kräftiger (pow), sonst brennt der Bloom jeden Stern weiß-gelb aus
     col = mix(col, lum * pow(uTint, vec3(1.6)) * 1.3, uTintMix);
-    gl_FragColor = vec4(col * 1.9, 1.0); // HDR (> 1) → löst den Bloom-Glanz aus
+    gl_FragColor = vec4(col * 1.9 * uBright, 1.0); // HDR (> 1) → löst den Bloom-Glanz aus
     #include <colorspace_fragment>
   }
 `;
@@ -101,6 +106,9 @@ const coronaFragment = /* glsl */ `
   #include <logdepthbuf_pars_fragment>
   uniform float uTime;
   uniform float uSpan; // Ausdehnung des Billboards in Sonnenradien
+  uniform vec3 uHot;   // Farbe am Rand (heiß)
+  uniform vec3 uCool;  // Farbe weiter draußen
+  uniform float uFlame; // Flammen-/Protuberanzstärke
   varying vec2 vP;
 
   float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -133,7 +141,7 @@ const coronaFragment = /* glsl */ `
     float streak = fbm(vec3(dir * 7.0, h * 1.6 - t * 0.35), 4);
     float tongues = smoothstep(0.30, 0.85, streak);
     float flame = clamp(1.0 - h / reach, 0.0, 1.0);
-    flame = flame * flame * (0.35 + 1.1 * tongues);
+    flame = flame * flame * (0.35 + 1.1 * tongues) * uFlame;
     flame *= smoothstep(-0.05, 0.04, h);
 
     // weicher Grundschein (pulsiert leicht)
@@ -145,7 +153,7 @@ const coronaFragment = /* glsl */ `
 
     // heiß = gelb-weiß am Rand, kühler = orange-rot weiter draußen
     float hot = clamp(inten * 0.6 - h * 0.3, 0.0, 1.0);
-    vec3 col = mix(vec3(1.0, 0.28, 0.04), vec3(1.0, 0.82, 0.38), hot);
+    vec3 col = mix(uCool, uHot, hot);
     col = mix(col, vec3(1.0, 0.95, 0.75), pow(hot, 3.0) * 0.35);
     gl_FragColor = vec4(col * 1.6, clamp(inten, 0.0, 1.0));
     #include <colorspace_fragment>
@@ -153,7 +161,8 @@ const coronaFragment = /* glsl */ `
 `;
 
 export function createSun(radius, map) {
-  const uniforms = { uTime: { value: 0 }, uMap: { value: map }, uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 } };
+  const uniforms = { uTime: { value: 0 }, uMap: { value: map }, uTint: { value: new THREE.Color(1, 1, 1) }, uTintMix: { value: 0 },
+    uKind: { value: new THREE.Vector4(1, 1, 0.3, 0) }, uBright: { value: 1 } };
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 96, 48),
     new THREE.ShaderMaterial({ uniforms, vertexShader: vertex, fragmentShader: fragment })
@@ -163,6 +172,7 @@ export function createSun(radius, map) {
   const span = 6;
   const coronaUniforms = {
     uTime: uniforms.uTime, uSpan: { value: span }, uSize: { value: radius * span },
+    uHot: { value: new THREE.Color(1.0, 0.82, 0.38) }, uCool: { value: new THREE.Color(1.0, 0.28, 0.04) }, uFlame: { value: 1 },
   };
   const corona = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
@@ -198,10 +208,54 @@ export function createSun(radius, map) {
   };
 }
 
-// Oberfläche eines anderen Sterns: gleicher Granulations-Shader wie die Sonne, in Sternfarbe umgefärbt
-export function createStarMaterial(map, color, timeUniform) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uTime: timeUniform, uMap: { value: map }, uTint: { value: new THREE.Color(color) }, uTintMix: { value: 1 } },
+// Sternparameter je Spektralklasse: [Zellgröße, Konvektion, Flecken, Bänder, Helligkeit, Flammen]
+// Heiße A/F-Sterne haben kaum Konvektion (glatte Oberfläche), K/M-Zwerge große Zellen und viele Sternflecken,
+// M-Zwerge zudem starke Flare-Aktivität, Weiße Zwerge sind glatt und gleißend, Braune Zwerge zeigen Wolkenbänder.
+const KIND = {
+  A: [1.4, 0.15, 0.0, 0, 1.25, 0.5], F: [1.2, 0.45, 0.1, 0, 1.12, 0.7], G: [1.0, 1.0, 0.3, 0, 1.0, 1.0],
+  K: [0.8, 1.0, 0.35, 0, 0.95, 1.1], M: [0.6, 1.0, 0.45, 0, 0.9, 1.5], D: [2.0, 0.05, 0.0, 0, 1.6, 0.25],
+  L: [0.5, 0.6, 0.2, 1, 0.55, 0.15],
+};
+export function spectralKind(spectralType) {
+  const sp = (spectralType || '').trim().toUpperCase();
+  if (/^(D|WD)/.test(sp)) return 'D';
+  const c = sp.replace(/^(ESD|USD|SD)/, '')[0] || 'M';
+  if ('OBA'.includes(c)) return 'A';
+  if ('LTY'.includes(c)) return 'L';
+  return 'FGKM'.includes(c) ? c : 'M';
+}
+
+// Oberfläche + Korona eines anderen Sterns: gleicher Shader wie die Sonne, in Sternfarbe und mit Typ-Parametern
+export function createStarBody(map, color, kind, timeUniform) {
+  const k = KIND[kind] ?? KIND.G;
+  const tint = new THREE.Color(color);
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uTime: timeUniform, uMap: { value: map }, uTint: { value: tint }, uTintMix: { value: 1 },
+      uKind: { value: new THREE.Vector4(k[0], k[1], k[2], k[3]) }, uBright: { value: k[4] } },
     vertexShader: vertex, fragmentShader: fragment,
   });
+  const span = 5;
+  const coronaUniforms = {
+    uTime: timeUniform, uSpan: { value: span }, uSize: { value: span },
+    uHot: { value: tint.clone().lerp(new THREE.Color(1, 1, 1), 0.35) }, uCool: { value: tint.clone().multiplyScalar(0.6) },
+    uFlame: { value: k[5] },
+  };
+  const corona = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    uniforms: coronaUniforms, vertexShader: coronaVertex, fragmentShader: coronaFragment,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  corona.frustumCulled = false;
+  corona.raycast = () => {};
+  const camPos = new THREE.Vector3(), pos = new THREE.Vector3();
+  return {
+    material, corona,
+    // pro Bild für sichtbare Sterne: Koronagröße an den scheinbaren Rand anpassen (wie bei der Sonne)
+    tick(camera, mesh) {
+      const r = mesh.scale.x * 0.996;
+      camera.getWorldPosition(camPos);
+      mesh.getWorldPosition(pos);
+      const d = Math.max(camPos.distanceTo(pos), r * 1.02);
+      coronaUniforms.uSize.value = ((r * d) / Math.sqrt(d * d - r * r)) * span; // Weltmaß (Billboard im Sichtraum)
+    },
+  };
 }

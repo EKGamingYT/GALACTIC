@@ -14,7 +14,7 @@ import { BODIES } from '../data/bodies.js';
 import { heliocentricPosition, orbitPath } from '../lib/orbits.js';
 import { planetTexture } from '../lib/textures.js';
 import { createBelts, BELTS } from './belts.js';
-import { createSun, createStarMaterial } from '../lib/sun.js';
+import { createSun, createStarBody, spectralKind } from '../lib/sun.js';
 import { createMoonSystems } from './moons.js';
 import { createSkybox } from '../lib/skybox.js';
 import { createStars } from './stars.js';
@@ -196,7 +196,7 @@ export function createSystemView(container, { onSelect }) {
     if (body.elements || body.kepler) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((ORBIT_STEPS + 1) * 3), 3));
-      orbit = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: body.color, transparent: true, opacity: layer ? 0.2 : 0.35 }));
+      orbit = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: body.color ?? '#8a97b5', transparent: true, opacity: layer ? 0.2 : 0.35 }));
       orbit.userData.baseOpacity = orbit.material.opacity;
       if (layer) { layers[layer].add(orbit); smallOrbits.push(orbit); } else layers.orbits.add(orbit);
     }
@@ -237,7 +237,8 @@ export function createSystemView(container, { onSelect }) {
   // --- Nachbarsterne (bis ~50 Lj) mit Exoplaneten ---------------------------------------------
   const stars = createStars(scene, {
     sceneDistance, nearDistance, glowTexture,
-    starMaterial: (color) => createStarMaterial(sunMap, color, sun.time),
+    timeUniform: sun.time,
+    makeStarSurface: (color, spectralType) => createStarBody(sunMap, color, spectralKind(spectralType), sun.time),
     makeLabel: (text, cls, y, body) => {
       const l = makeLabel(text, cls, y, () => pick(body), body.color);
       declutterItems.push({ el: l.element, id: body.id, prio: cls.includes('star-major') ? 46 : 22 });
@@ -811,6 +812,7 @@ export function createSystemView(container, { onSelect }) {
       }
     }
     lastFollowPos = follow ? worldPos(follow) : null;
+    stars.tickSurfaces(camera);
     stars.updateVisibility(camera, starView, selectedId, camera.position.length() > sceneDistance(5000, blend));
     if (starView) moons.setVisible(false);
     else moons.updateVisibility(camera, selectedId);

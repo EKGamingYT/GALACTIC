@@ -38,7 +38,7 @@ function hitProxy(target) {
   return m;
 }
 
-export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glowTexture, starMaterial }) {
+export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glowTexture, makeStarSurface, timeUniform }) {
   const group = new THREE.Group();
   scene.add(group);
   const items = new Map();
@@ -71,8 +71,18 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     // Szenengröße wie bei unserer Sonne (4 Einheiten bei 1 R☉), wurzelgestaucht; endgültig in update()
     const r = Math.min(6, Math.max(0.6, 4 * Math.sqrt(radiusSun)));
     // Oberfläche: derselbe animierte Granulations-Shader wie unsere Sonne, in der Sternfarbe
+    // Sterntyp bestimmt Granulation, Flecken, Helligkeit und Korona (siehe sun.js)
+    const surface = makeStarSurface ? makeStarSurface(body.color, s.spectralType) : null;
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24),
-      starMaterial ? starMaterial(body.color) : new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.5) }));
+      surface ? surface.material : new THREE.MeshBasicMaterial({ color: new THREE.Color(body.color).multiplyScalar(1.5) }));
+    if (surface) sphere.add(surface.corona);
+    // weicher Lichthof in Sternfarbe (wächst mit der Kugel) – lässt auch kleine Zwerge sichtbar strahlen
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glow, color: body.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5,
+    }));
+    halo.scale.setScalar(4.2);
+    halo.raycast = () => {};
+    sphere.add(halo);
     sphere.userData.body = body;
     node.add(sphere);
     sphere.scale.setScalar(r);
@@ -99,7 +109,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       const teqK = Math.round(254.9 * Math.pow(Math.max(L, 1e-5), 0.25) / Math.sqrt(p.aAu));
       const look = exoplanetLook(p, teqK);
       const id = `planet-${s.id}-${p.name}`;
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(pr, 32, 16), createExoplanetMaterial(look, id, body.color));
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(pr, 32, 16), createExoplanetMaterial(look, id, body.color, timeUniform));
       const planetBody = {
         ...p, id, type: `Exoplanet von ${s.name}`, color: look.color, isExoplanet: true, host: s.name,
         teqK, kind: look.kind, // Einordnung + Darstellung geschätzt (keine Aufnahme vorhanden)
@@ -119,7 +129,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       color: 0x3ddc84, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
     })) : null;
     if (hzRing) { hzRing.rotation.x = -Math.PI / 2; sys.add(hzRing); }
-    items.set(body.id, { s, body, dir, node, sprite, sphere, sphereHit, r, label, sys, planets, hz, hzRing, extent: 0 });
+    items.set(body.id, { s, body, dir, node, sprite, sphere, sphereHit, r, surface, label, sys, planets, hz, hzRing, extent: 0 });
   }
 
   // Mehrfachsysteme: aus der Ferne ein gemeinsamer Systemname am Hauptstern statt vieler Einzelnamen
@@ -230,9 +240,15 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     }
   }
 
+  // Koronen der gerade sichtbaren Sterne an die Kamera anpassen
+  function tickSurfaces(camera) {
+    for (const it of items.values()) if (it.surface && it.node.visible && it.sphere.visible) it.surface.tick(camera, it.sphere);
+  }
+
   return {
     update,
     updateVisibility,
+    tickSurfaces,
     // nur, was gerade zu sehen ist – versteckte Planetensysteme sollen keine Klicks abfangen
     meshes: () => [...items.values()].filter((it) => it.node.visible).flatMap((it) => [
       ...(it.sphere.visible ? [it.sphere, it.sphereHit] : []),
