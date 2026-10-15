@@ -2,12 +2,14 @@
 // Positionsanzeige mit Maßstab und Merkmals-Karte. Reines DOM, Stil in src/map.css.
 import { CLASSES } from './featureTypes.js';
 import { fmtKm, fmtLat, fmtLon, nfmt } from './geo.js';
+import { PLACE_LANGS } from './places.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* privater Modus */ } },
 };
+const LANG_KEY = 'galactic.map.lang';
 const touch = () => window.matchMedia?.('(pointer: coarse)').matches;
 
 export function createMapUI(root, { body, prefs, on }) {
@@ -16,6 +18,9 @@ export function createMapUI(root, { body, prefs, on }) {
   const hints = touch()
     ? ['Wischen: Globus drehen', 'Zwei Finger kneifen: zoomen', 'Zwei Finger hoch/runter: kippen', 'Doppeltippen: dorthin fliegen']
     : ['Ziehen: Globus drehen', 'Mausrad: zum Cursor zoomen', 'Doppelklick: dorthin fliegen', 'Strg + Ziehen oder Mittelklick: kippen', 'Rechts ziehen: stufenlos zoomen'];
+
+  let lang = store.get(LANG_KEY);
+  if (!PLACE_LANGS.some(([c]) => c === lang)) lang = 'de';
 
   root.innerHTML = `
     <div class="map-left">
@@ -29,6 +34,7 @@ export function createMapUI(root, { body, prefs, on }) {
             <dt>Ebene</dt><dd class="mi-layer"></dd>
             <dt>Quelle</dt><dd class="mi-credit"></dd>
             <dt class="mi-names-k" hidden>Namen</dt><dd class="mi-names" hidden></dd>
+            <dt class="mi-places-k" hidden>Namen</dt><dd class="mi-places" hidden></dd>
           </dl>
           <ul class="mi-hints">${hints.map((h) => `<li>${h}</li>`).join('')}</ul>
           <div class="mi-legend" hidden>${Object.values(CLASSES).filter((c) => c.de !== CLASSES.other.de)
@@ -38,6 +44,9 @@ export function createMapUI(root, { body, prefs, on }) {
       <div class="map-chips" role="group" aria-label="Kartenebenen">
         <button class="map-chip" data-key="grid" aria-pressed="${prefs.grid}" title="Breiten- und Längengitter">Gitter</button>
         <button class="map-chip" data-key="names" aria-pressed="${prefs.names}" title="Offizielle IAU-Ortsnamen" hidden>Namen</button>
+        <button class="map-chip" data-key="places" aria-pressed="false" title="Ortsnamen (Staaten und Städte) einblenden" hidden>Ortsnamen</button>
+        <select class="map-select" aria-label="Sprache der Ortsnamen" title="Sprache der Ortsnamen" hidden>${PLACE_LANGS
+          .map(([c, n]) => `<option value="${c}"${c === lang ? ' selected' : ''}>${n}</option>`).join('')}</select>
         <button class="map-chip" data-key="flat" aria-pressed="false" title="Zwischen Globus und flacher Karte wechseln">Flach</button>
       </div>
     </div>
@@ -74,6 +83,8 @@ export function createMapUI(root, { body, prefs, on }) {
     };
   });
   root.querySelectorAll('[data-zoom]').forEach((b) => (b.onclick = () => on.zoom(Number(b.dataset.zoom))));
+  const langSel = q('.map-select');
+  langSel.onchange = () => { lang = langSel.value; store.set(LANG_KEY, lang); on.lang?.(lang); };
   q('.map-home').onclick = on.home;
   q('.map-compass').onclick = on.north;
 
@@ -89,7 +100,8 @@ export function createMapUI(root, { body, prefs, on }) {
   return {
     setLayer(layer) {
       q('.mi-layer').textContent = layer.name;
-      q('.mi-credit').textContent = layer.credit;
+      const under = typeof layer.underlay === 'object' ? layer.underlay.credit : '';
+      q('.mi-credit').textContent = [layer.credit, ...(layer.overlays ?? []).map((o) => o.credit), under].filter(Boolean).join(' · ');
     },
     setHeading(deg) {
       deg = ((((deg + 180) % 360) + 360) % 360) - 180; // −180…180: kein Sprung 0°/360°
@@ -113,6 +125,17 @@ export function createMapUI(root, { body, prefs, on }) {
       if (count) {
         q('.mi-names').textContent = `IAU · USGS Gazetteer · ${count.toLocaleString('de-DE')} von ${total.toLocaleString('de-DE')} Namen`;
       }
+    },
+    getLang: () => lang,
+    // Ortsnamen der Erde: Schalter + Sprachwahl; Hinweis zur Quelle bzw. zur Beschriftung der Kacheln
+    setPlaces({ available, on, tileNames }) {
+      q('[data-key="places"]').hidden = langSel.hidden = !available;
+      q('[data-key="places"]').setAttribute('aria-pressed', !!on);
+      langSel.disabled = !on;
+      q('.mi-places-k').hidden = q('.mi-places').hidden = !available;
+      q('.mi-places').textContent = tileNames
+        ? 'Die Kacheln dieser Ebene tragen OSM-Namen in der jeweiligen Landessprache. Ortsnamen in Wunschsprache: Schalter „Ortsnamen“ (Natural Earth, gemeinfrei).'
+        : 'Natural Earth (gemeinfrei) · Staaten und Städte, Sprache über die Auswahl wählbar';
     },
     setFlat(flat) { q('[data-key="flat"]').setAttribute('aria-pressed', flat); },
     showFeature(f) {

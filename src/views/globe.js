@@ -13,6 +13,7 @@ import { createTerrariumTerrain } from '../lib/terrarium.js';
 import { enableOsmBuildings } from '../lib/osmBuildings.js';
 import { createNavigation } from './map/navigation.js';
 import { createNames, hasNames } from './map/names.js';
+import { createPlaces } from './map/places.js';
 import { createMapUI } from './map/ui.js';
 import { metersPerPixel, niceKm, toLatLon } from './map/geo.js';
 
@@ -32,12 +33,13 @@ function makeProvider(layer, ellipsoid) {
     tileWidth: layer.tileSize ?? 256,
     tileHeight: layer.tileSize ?? 256,
     maximumLevel: layer.maxLevel,
-    credit: new Credit(layer.credit, true),
+    ...(layer.credit && { credit: new Credit(layer.credit, true) }),
   });
 }
 
 // Schalter der Karte (bleiben beim Körperwechsel erhalten)
-const prefs = { grid: false, names: true };
+// places: Ortsnamen der Erde – je Kartenebene (Name) vom Nutzer gewählter Zustand, sonst Standard der Ebene (layer.places)
+const prefs = { grid: false, names: true, places: {} };
 
 export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let viewer = null;
@@ -48,6 +50,10 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let polarCaps = null; // Materialien der Erd-Polkappen (Farbe je Kartenebene)
   let ui = null;
   let names = null;
+  let places = null;
+  let placesReady = false;
+  let placesLoading = false;
+  let layerIdx = 0;
   let nav = null;
   let disposers = [];
 
@@ -63,6 +69,28 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     })));
   }
 
+  // Ortsnamen der Erde: je Ebene ein/aus (Standard: an für Satellit/Hybrid, aus für Karten mit eigener Beschriftung)
+  function placesWanted() {
+    const layer = currentBody?.maps[layerIdx];
+    return !!places && (prefs.places[layer.name] ?? !!layer.places);
+  }
+  function applyPlaces() {
+    if (!places || !ui) return;
+    const on = placesWanted();
+    if (on && !placesReady && !placesLoading) {
+      const v = viewer;
+      placesLoading = true;
+      places.load(ui.getLang()).then((info) => {
+        if (viewer !== v || !info) return;
+        placesReady = true;
+        places.setLang(ui.getLang()); // falls die Sprache während des Ladens gewechselt wurde
+        applyPlaces();
+      }).catch(() => { placesLoading = false; /* Ortsnamen sind optional */ });
+    }
+    places.setEnabled(on && placesReady);
+    ui.setPlaces({ available: true, on, tileNames: !!currentBody.maps[layerIdx].tileNames });
+  }
+
   function setLayer(index) {
     if (!viewer) return;
     viewer.imageryLayers.removeAll();
@@ -75,11 +103,15 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       })));
     }
     // Lücken detaillierter Karten (nicht abgedeckte Gebiete) mit der vollständigen
-    // Grundkarte füllen, leicht abgedunkelt – statt schwarzer Flächen
+    // Grundkarte füllen, leicht abgedunkelt – statt schwarzer Flächen. `underlay` ist der Index einer
+    // anderen Ebene oder eine eigene Kachelquelle (plain: ohne Abdunkeln, z. B. Grobbild unter dem Satelliten).
     if (layer.underlay !== undefined) {
-      viewer.imageryLayers.add(new ImageryLayer(makeProvider(currentBody.maps[layer.underlay], ellipsoid), { brightness: 0.7, saturation: 0.6 }));
+      const under = typeof layer.underlay === 'object' ? layer.underlay : currentBody.maps[layer.underlay];
+      viewer.imageryLayers.add(new ImageryLayer(makeProvider(under, ellipsoid), under.plain ? {} : { brightness: 0.7, saturation: 0.6 }));
     }
     viewer.imageryLayers.add(new ImageryLayer(makeProvider(layer, ellipsoid)));
+    // transparente Zusatzebenen (z. B. Straßen und Gewässer über dem Satellitenbild)
+    for (const o of layer.overlays ?? []) viewer.imageryLayers.add(new ImageryLayer(makeProvider(o, ellipsoid), { alpha: o.alpha ?? 1, brightness: o.brightness ?? 1 }));
     // Polkappen (Erde) passend zur Kartenart einfärben: Eis beim Satellitenbild,
     // Meer/Land-Farbe der Straßen- bzw. Topokarte (OSM endet bei ±85°)
     if (polarCaps) {
@@ -88,7 +120,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       polarCaps[1].uniforms.color = Color.fromCssColorString(south);
     }
     applyGrid();
+    layerIdx = index;
     ui?.setLayer(layer);
+    applyPlaces();
     onLayers?.(currentBody, index);
   }
 
@@ -97,7 +131,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     disposers = [];
     nav?.dispose();
     names?.dispose();
-    nav = names = ui = gridLayer = polarCaps = null;
+    places?.dispose();
+    nav = names = places = ui = gridLayer = polarCaps = null;
+    placesReady = placesLoading = false;
     viewer?.destroy();
     viewer = null;
     container.innerHTML = '';
@@ -186,14 +222,17 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
         north: () => nav.resetNorth(),
         closeFeature,
         flyToFeature: (f) => names.flyTo(f, nav),
+        lang: (code) => places?.setLang(code),
         toggle: (key, on) => {
           if (key === 'grid') { prefs.grid = on; applyGrid(); }
+          if (key === 'places') { prefs.places[currentBody.maps[layerIdx].name] = on; applyPlaces(); }
           if (key === 'names') { prefs.names = on; names.setEnabled(on && namesReady); if (!on) closeFeature(); }
           if (key === 'flat') { if (on) scene.morphTo2D(1); else scene.morphTo3D(1); }
         },
       },
     });
     ui.setNames({ available: namesAvailable, count: 0 });
+    if (isEarth) places = createPlaces(v, { ellipsoid, radius: r });
     // flache Karte ohne Schattierung; Globus mit Seitenlicht
     disposers.push(scene.morphStart.addEventListener(() => { globe.enableLighting = false; }));
     disposers.push(scene.morphComplete.addEventListener(() => {

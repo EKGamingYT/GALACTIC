@@ -8,6 +8,14 @@
 const trekTiles = (body, layer, ext = 'jpg') =>
   `https://trek.nasa.gov/tiles/${body}/EQ/${layer}/1.0.0/default/default028mm/{z}/{y}/{x}.${ext}`;
 
+// Erdkarte: EOX-Kachelserver (tiles.maps.eox.at, WMTS GoogleMapsCompatible) und NASA GIBS als Grobbild
+const EOX = 'https://tiles.maps.eox.at/wmts/1.0.0';
+const S2_CREDIT = 'Sentinel-2 cloudless – https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016 & 2017) · CC BY 4.0';
+const GIBS_BLUE_MARBLE = {
+  mercator: true, maxLevel: 8, credit: 'NASA GIBS – Blue Marble',
+  url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
+};
+
 export const BODIES = [
   {
     id: 'sun', name: 'Sonne', type: 'Stern', color: '#ffcc55',
@@ -33,19 +41,31 @@ export const BODIES = [
     // Vollständiges Grundbild (inkl. Pole) unter allen Kartenebenen – sofort sichtbar
     mapFallback: '/textures/2k_earth_daymap.jpg',
     maps: [
+      // Sentinel-2 cloudless 2016 (EOX, CC BY 4.0; die Mosaike ab 2018 sind nicht-kommerziell und daher nicht verwendet),
+      // darunter NASA-GIBS Blue Marble als Grobbild. maxLevel 14 ≈ 10 m Pixel (feinere EOX-Stufen sind nur hochgerechnet).
       {
-        name: 'Satellit', mercator: true, maxLevel: 8,
-        url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg',
-        credit: 'NASA GIBS – Blue Marble',
+        name: 'Satellit', mercator: true, maxLevel: 14, url: `${EOX}/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,
+        credit: S2_CREDIT, underlay: { ...GIBS_BLUE_MARBLE, plain: true }, places: true,
+        capColors: ['#c4d6ea', '#eef2f6'], // Arktis: Meereis/Ozean-Mischton, Antarktis: Schnee
+      },
+      // Satellit + transparente Straßen- und Gewässer-Kacheln (EOX-Overlays aus OpenStreetMap-Daten); Namen kommen aus den Ortsnamen
+      {
+        name: 'Hybrid', mercator: true, maxLevel: 14, url: `${EOX}/s2cloudless_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg`,
+        credit: S2_CREDIT, underlay: { ...GIBS_BLUE_MARBLE, plain: true }, places: true,
+        capColors: ['#c4d6ea', '#eef2f6'],
+        overlays: [
+          { mercator: true, maxLevel: 17, url: `${EOX}/hydrography_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.png`, alpha: 0.7, credit: 'Straßen & Gewässer: © OpenStreetMap-Mitwirkende (ODbL), Darstellung EOX::Maps (maps.eox.at)' },
+          { mercator: true, maxLevel: 17, url: `${EOX}/streets_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.png`, alpha: 0.55, brightness: 0.88 },
+        ],
       },
       {
         name: 'Straßen', mercator: true, maxLevel: 19, url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        credit: '© OpenStreetMap-Mitwirkende (ODbL)',
+        credit: '© OpenStreetMap-Mitwirkende (ODbL)', tileNames: true,
         capColors: ['#aad3df', '#f2efe9'], // OSM-Meeresblau (Arktis) / Landfarbe (Antarktis)
       },
       {
         name: 'Topografie', mercator: true, maxLevel: 17, url: 'https://tile.opentopomap.org/{z}/{x}/{y}.png',
-        credit: 'Kartendaten: © OpenStreetMap-Mitwirkende, SRTM | Darstellung: © OpenTopoMap (CC-BY-SA)',
+        credit: 'Kartendaten: © OpenStreetMap-Mitwirkende, SRTM | Darstellung: © OpenTopoMap (CC-BY-SA)', tileNames: true,
         capColors: ['#a5c7e3', '#f5f4f0'],
       },
     ],

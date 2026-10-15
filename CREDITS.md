@@ -5,7 +5,7 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 ## Daten & Dienste
 | Quelle | Verwendung | Lizenz / Bedingungen |
 |---|---|---|
-| NASA GIBS – Blue Marble Shaded Relief & Bathymetry (gibs.earthdata.nasa.gov) | Erdkarte | NASA-Daten, frei nutzbar (NASA Earthdata Data Use Policy) |
+| NASA GIBS – Blue Marble Shaded Relief & Bathymetry (gibs.earthdata.nasa.gov) | Erdkarte (Grobbild unter „Satellit“/„Hybrid“) | NASA-Daten, frei nutzbar (NASA Earthdata Data Use Policy) |
 | NASA Moon Trek – LRO WAC Global Mosaic (trek.nasa.gov) | Mondkarte | NASA/JPL, frei nutzbar |
 | NASA Mars Trek – Viking MDIM 2.1 Color Mosaic (trek.nasa.gov) | Marskarte | NASA/USGS, frei nutzbar |
 | NASA Planetary Fact Sheet (nssdc.gsfc.nasa.gov/planetary/factsheet) | Physikalische Daten | NASA, gemeinfrei |
@@ -34,6 +34,9 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | Brown & Batygin 2021 (AJ 162, 219) | Hypothetische Bahn von Planet Neun | wissenschaftliche Veröffentlichung |
 | NASA/IPAC IRSA – SPHEREx Quick Release (irsa.ipac.caltech.edu, DOI 10.26131/IRSA652, 10.26131/IRSA662) | SPHEREx-Himmelsbilder (geplant) | NASA-Daten; Zitierhinweis von IRSA beachten |
 | IAU Gazetteer of Planetary Nomenclature (USGS Astrogeology Science Center, planetarynames.wr.usgs.gov; GIS-Download der Mittelpunkte, via asc-planetarynames-data.s3.us-west-2.amazonaws.com) – offizielle Namen mit Lage, Durchmesser und Typ (21 Körper, in src/data/nomenclature/ ausgewählt: große Krater plus alle übrigen Merkmalstypen) | Ortsnamen in den Planetenkarten (Namensschalter, Klick auf einen Namen) | gemeinfrei (USGS/NASA); Namen von der IAU (Working Group for Planetary System Nomenclature), Abruf per scripts/fetch-nomenclature.mjs |
+| EOX IT Services GmbH – Sentinel-2 cloudless 2016 (s2maps.eu, WMTS tiles.maps.eox.at, Layer `s2cloudless_3857`), Copernicus-Sentinel-2-Daten 2016 & 2017 | Erdkarten „Satellit“ und „Hybrid“ (≈ 10 m) | CC BY 4.0 – Namensnennung: „Sentinel-2 cloudless – https://s2maps.eu by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016 & 2017)“. Die Mosaike ab 2018 sind nicht-kommerziell lizenziert und werden bewusst nicht verwendet |
+| EOX Overlay-Kacheln „Streets“ und „Hydrography“ (tiles.maps.eox.at, aus OpenStreetMap-Daten gerendert) | Straßen und Gewässer in der Erdkarte „Hybrid“ | Daten © OpenStreetMap-Mitwirkende, ODbL; Darstellung EOX / MapServer-Basemaps · Nutzung laut EOX::Maps frei („Just feel free to use them“) mit Namensnennung und Link auf https://maps.eox.at; Demo-Dienst ohne Garantie, ggf. Ratenbegrenzung |
+| Natural Earth – Populated Places und Admin 0 Countries, 1:10 Mio. (naturalearthdata.com; GeoJSON-Spiegel github.com/nvkelso/natural-earth-vector; Abruf per scripts/fetch-places.mjs nach src/data/places/; Namen in 13 Sprachen, Übersetzungen aus Wikidata) | Ortsnamen der Erde (Schalter „Ortsnamen“ mit Sprachwahl) | gemeinfrei (Public Domain) |
 
 ## Software
 | Bibliothek | Lizenz |

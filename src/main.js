@@ -1,3 +1,4 @@
+import './ui/boot.js'; // Startbildschirm (Uplink-Animation) – zuerst laden, damit er den Ladefortschritt von Anfang an mitbekommt
 import './style.css';
 import { BODIES, bodyById } from './data/bodies.js';
 import { MAP_BODIES, mapBodyById, mapIdFor } from './data/mapcatalog.js';
@@ -536,4 +537,4 @@ function route() {
 window.addEventListener('hashchange', route);
 if (!location.hash) location.hash = '#/system';
 route();
-window.dispatchEvent(new Event('galactic:ready')); // Startbildschirm ausblenden (index.html)
+window.dispatchEvent(new Event('galactic:ready')); // Startbildschirm (src/ui/boot.js): Ansichten stehen, Ausblenden + Intro einleiten

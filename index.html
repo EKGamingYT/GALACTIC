@@ -20,8 +20,10 @@
     <!-- Kritisches CSS: Startbildschirm steht sofort, noch bevor style.css (per JS) geladen ist -->
     <style>
       html, body { margin: 0; background: #04060d; }
+      body { overflow: hidden; }
+      .boot, .boot *, .boot *::before, .boot *::after { box-sizing: border-box; }
       .boot {
-        position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+        position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow: hidden;
         background:
           radial-gradient(1.2px 1.2px at 12% 22%, #fff9, transparent 60%),
           radial-gradient(1px 1px at 78% 14%, #fff8, transparent 60%),
@@ -32,54 +34,280 @@
           radial-gradient(1px 1px at 6% 62%, #fff6, transparent 60%),
           radial-gradient(ellipse at 50% 42%, #0e1a38 0%, #070c1b 55%, #04060d 100%);
         color: #e8eefc; font: 14px/1.5 Inter, system-ui, sans-serif;
-        transition: opacity 0.7s ease, visibility 0s 0.7s;
+        transition: opacity 0.42s ease, visibility 0s 0.42s;
       }
       .boot.done { opacity: 0; visibility: hidden; pointer-events: none; }
-      .boot-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding: 0 24px; }
-      .boot-mark { width: 84px; height: 84px; filter: drop-shadow(0 0 22px rgba(110, 168, 255, 0.55)); }
+      .boot.fast { transition: opacity 0.22s ease, visibility 0s 0.22s; }
+      .boot-inner {
+        display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(460px, 100%); padding: 16px; text-align: center;
+        transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1), filter 0.42s ease;
+      }
+      .boot.done .boot-inner { transform: scale(1.05); filter: blur(3px); }
+      .boot.fast .boot-inner { transition-duration: 0.22s; }
+      .bt-head { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      .boot-mark { width: 60px; height: 60px; filter: drop-shadow(0 0 20px rgba(110, 168, 255, 0.5)); transition: filter 0.4s ease; }
+      .boot.go .boot-mark { filter: drop-shadow(0 0 28px rgba(185, 140, 255, 0.85)); }
       .boot-ring { transform-origin: 32px 32px; animation: boot-spin 2.6s linear infinite; }
       .boot-name {
-        margin-top: 6px; padding-left: 0.2em; font: 700 clamp(18px, 4.6vw, 26px)/1.1 Orbitron, system-ui, sans-serif; letter-spacing: 0.2em;
+        margin-top: 2px; padding-left: 0.2em; font: 700 clamp(18px, 4.6vw, 26px)/1.1 Orbitron, system-ui, sans-serif; letter-spacing: 0.2em;
         background: linear-gradient(90deg, #fff, #bcd3ff 60%, #d6bfff); -webkit-background-clip: text; background-clip: text; color: transparent;
       }
-      .boot-sub { padding-left: 0.3em; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: #8a97b5; }
-      .boot-bar { width: 168px; height: 2px; margin-top: 6px; overflow: hidden; border-radius: 2px; background: rgba(130, 170, 255, 0.16); }
+      .boot-sub { min-height: 1.5em; padding-left: 0.3em; font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: #8a97b5; }
+
+      /* Uplink-Diagramm: Bodenstation → Satelliten-Relais → Datenzentren. Grundzustand = fertig aufgebaut;
+         die Animationen (nur ohne „reduzierte Bewegung“) starten vom dunklen Anfangszustand und laufen rein per CSS
+         schon, bevor src/ui/boot.js geladen ist. Zeiten (--d Start, --du Dauer): Zeitleiste ≈ 2,15 s. */
+      .bt-net { display: block; width: 100%; height: auto; overflow: hidden; }
+      .bt-net text { font: 500 9px Orbitron, system-ui, sans-serif; letter-spacing: 0.12em; fill: #aab9dc; }
+      .bt-net text.sm { font-size: 7.5px; letter-spacing: 0.18em; fill: #6c7aa0; }
+      .bt-planet { fill: url(#bt-pl); stroke: rgba(110, 168, 255, 0.5); stroke-width: 1.2; }
+      .bt-halo { fill: none; stroke: rgba(110, 168, 255, 0.1); stroke-width: 6; }
+      .bt-orbit { fill: none; stroke: rgba(130, 170, 255, 0.24); stroke-width: 1; stroke-dasharray: 2 5; }
+      .bt-net .ln { fill: none; stroke: #6ea8ff; stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 1 1; }
+      .bt-net .fl { fill: none; stroke: #e6efff; stroke-width: 1.8; stroke-linecap: round; stroke-dasharray: 0.02 0.18; transition: stroke 0.4s ease; }
+      .boot.go .bt-net .fl { stroke: #fff; }
+      .bt-net .nd { fill: none; stroke: #6ea8ff; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+      .bt-net .nd.v { stroke: #b98cff; }
+      .bt-net .nd .bg { fill: #0b1430; }
+      .bt-net .nd .pn { fill: rgba(110, 168, 255, 0.22); }
+      .bt-net .nd.v .pn { fill: rgba(185, 140, 255, 0.22); }
+      .bt-net .nd .dot { fill: #fff; stroke: none; }
+      .bt-net .pr { fill: none; stroke: #6ea8ff; stroke-width: 1.2; opacity: 0; transform-box: fill-box; transform-origin: center; }
+      .bt-net .pr.v { stroke: #b98cff; }
+
+      /* Terminal-Statusprotokoll */
+      .bt-side { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+      .bt-log {
+        width: 100%; padding: 10px 12px 11px; text-align: left; color: #b9c6e4;
+        border: 1px solid rgba(130, 170, 255, 0.16); border-radius: 10px; background: rgba(8, 14, 30, 0.55);
+        font: clamp(10.5px, 3.1vw, 12.5px)/1.65 ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+      }
+      .bt-hd { display: flex; justify-content: space-between; margin-bottom: 6px; font: 500 9px/1 Orbitron, system-ui, sans-serif; letter-spacing: 0.22em; text-transform: uppercase; color: #6c7aa0; }
+      .bt-live::before { content: ''; display: inline-block; width: 5px; height: 5px; margin-right: 6px; border-radius: 50%; background: #6ea8ff; vertical-align: 1px; }
+      .bt-log ul { margin: 0; padding: 0; list-style: none; }
+      .bt-l { display: flex; align-items: flex-start; gap: 6px; opacity: 0.3; transition: opacity 0.25s ease, color 0.25s ease; }
+      .bt-l.act { opacity: 1; color: #fff; }
+      .bt-l.ok { opacity: 1; }
+      .bt-mk { display: grid; place-items: center; flex: none; width: 14px; height: 1.65em; }
+      .bt-mk > * { grid-area: 1 / 1; }
+      .bt-dot { width: 3px; height: 3px; border-radius: 50%; background: #51618a; }
+      .bt-sp { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid rgba(185, 140, 255, 0.25); border-top-color: #b98cff; opacity: 0; }
+      .bt-ck { font-style: normal; font-weight: 700; color: #6ea8ff; opacity: 0; }
+      .bt-l.act .bt-dot, .bt-l.ok .bt-dot { opacity: 0; }
+      .bt-l.act .bt-sp { opacity: 1; }
+      .bt-l.ok .bt-ck { opacity: 1; }
+      .bt-n { font-weight: inherit; color: #e8eefc; }
+      .bt-i { color: #b98cff; }
+      .bt-l[data-s='go'].ok .bt-tx { color: #fff; font-weight: 700; }
+
+      .boot-bar { width: 100%; height: 2px; overflow: hidden; border-radius: 2px; background: rgba(130, 170, 255, 0.16); }
       .boot-bar i { display: block; width: 40%; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #6ea8ff, #b98cff); animation: boot-run 1.3s ease-in-out infinite; }
+      .boot.run .boot-bar i { width: 100%; animation: none; transform: scaleX(var(--p, 0)); transform-origin: 0 50%; transition: transform 0.2s linear; }
+
+      .bt-sr { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .bt-clock { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+      .bt-skip {
+        position: absolute; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+        min-height: 40px; padding: 8px 18px; border: 1px solid rgba(130, 170, 255, 0.22); border-radius: 999px; background: rgba(8, 14, 30, 0.5);
+        font: 500 11px/1 Inter, system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #8a97b5; cursor: pointer;
+        opacity: 0; pointer-events: none; transition: opacity 0.4s ease, color 0.2s ease, border-color 0.2s ease;
+      }
+      .boot.run .bt-skip { opacity: 0.9; pointer-events: auto; }
+      .boot.skipped .bt-skip, .boot.done .bt-skip { opacity: 0; pointer-events: none; }
+      .bt-skip:hover { color: #fff; border-color: rgba(130, 170, 255, 0.5); }
+      .bt-skip:focus-visible { outline: 2px solid #6ea8ff; outline-offset: 2px; }
+      .bt-skip kbd { margin-left: 6px; padding: 2px 5px; border: 1px solid rgba(130, 170, 255, 0.28); border-radius: 4px; font: 10px/1 ui-monospace, Consolas, monospace; letter-spacing: 0; text-transform: none; }
+      .bt-k-coarse { display: none; }
+      @media (pointer: coarse) { .bt-k-fine { display: none; } .bt-k-coarse { display: inline; } }
+
       @keyframes boot-spin { to { transform: rotate(360deg); } }
       @keyframes boot-run { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+      @keyframes bt-spin { to { transform: rotate(360deg); } }
+      @keyframes bt-draw { from { stroke-dashoffset: 1; } }
+      @keyframes bt-pop { from { opacity: 0.2; } }
+      @keyframes bt-ping { from { opacity: 0.85; transform: scale(0.5); } to { opacity: 0; transform: scale(2.6); } }
+      @keyframes bt-fl { to { stroke-dashoffset: -0.2; } }
+      @keyframes bt-show { from { opacity: 0; } }
+      @keyframes bt-bob { to { transform: translateY(-2px); } }
+      @keyframes bt-lit { from { opacity: 0.3; } }
+      @keyframes bt-flash { from, to { opacity: 1; } }
+      @keyframes bt-ck { from { opacity: 0; transform: scale(0.3); } }
+      @keyframes bt-nm { from { opacity: 0.35; } }
+      @keyframes bt-clock { from { opacity: 0.99; } to { opacity: 1; } }
+      @keyframes bt-blink { 50% { opacity: 0.25; } }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .bt-net .ln { animation: bt-draw var(--du, 0.35s) var(--d, 0s) ease-in-out backwards; }
+        .bt-net .nd, .bt-net text.lb { animation: bt-pop 0.4s var(--d, 0s) ease-out backwards; }
+        .bt-net .pr { animation: bt-ping 1s var(--d, 0s) ease-out; }
+        .bt-net .fl { animation: bt-fl 1.5s linear infinite reverse, bt-show 0.6s 2.1s ease backwards; }
+        .bt-net .bob { animation: bt-bob 3.4s ease-in-out infinite alternate; }
+        .bt-live::before { animation: bt-blink 1.2s steps(2, jump-none) infinite; }
+        .bt-sp { animation: bt-spin 0.8s linear infinite; }
+        .p1 { animation: bt-lit 0.3s var(--a) ease-out backwards; }
+        .p1 .bt-dot { animation: bt-flash var(--a) linear; }
+        .p1 .bt-sp { animation: bt-spin 0.8s linear infinite, bt-flash var(--du) var(--a) linear; }
+        .p1 .bt-ck { animation: bt-ck 0.3s var(--ok) ease-out backwards; }
+        .p1 .bt-n { animation: bt-nm 0.35s var(--d) ease-out backwards; }
+        .bt-clock { animation: bt-clock 2.15s linear both; }
+      }
+      @media (max-height: 620px) {
+        .boot-sub { display: none; }
+        .boot-mark { width: 46px; height: 46px; }
+        .boot-inner { gap: 8px; }
+      }
+      @media (min-width: 720px) and (min-height: 720px) { .boot-inner { width: min(540px, 100%); } }
+      @media (max-height: 500px) and (orientation: landscape) {
+        .boot-inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 22px; align-items: center; width: min(780px, 100%); }
+        .bt-head { grid-column: 1; grid-row: 1; flex-direction: row; justify-self: start; gap: 12px; }
+        .boot-name { margin: 0; font-size: 15px; letter-spacing: 0.16em; }
+        .bt-log { font-size: 10px; }
+        .boot-inner { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+        .bt-net { grid-column: 1; grid-row: 2; align-self: start; }
+        .bt-side { grid-column: 2; grid-row: 1 / 3; }
+      }
       @media (prefers-reduced-motion: reduce) {
-        .boot { transition-duration: 0.01s; }
+        .boot, .boot.fast { transition-duration: 0.01s, 0s; transition-delay: 0s; }
+        .boot-inner, .boot-mark, .bt-l, .boot-bar i { transition: none; }
+        .boot.done .boot-inner { transform: none; filter: none; }
         .boot-ring, .boot-bar i { animation: none; }
         .boot-bar i { width: 100%; }
+        .boot.run .boot-bar i { width: 100%; }
       }
     </style>
   </head>
   <body>
-    <div class="boot" id="boot" role="status" aria-live="polite">
+    <!-- Startbildschirm „Uplink“: Zeitleiste für Bodenstation → Satelliten → Datenzentren läuft per CSS (siehe oben),
+         src/ui/boot.js koppelt den Rest (Sternkatalog … System bereit) an den echten Ladefortschritt. -->
+    <div class="boot" id="boot">
       <div class="boot-inner">
-        <svg class="boot-mark" viewBox="0 0 64 64" aria-hidden="true">
+        <div class="bt-head">
+          <svg class="boot-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <defs>
+              <radialGradient id="boot-g" cx="35%" cy="32%" r="75%">
+                <stop offset="0" stop-color="#fff" />
+                <stop offset="0.38" stop-color="#6ea8ff" />
+                <stop offset="1" stop-color="#b98cff" />
+              </radialGradient>
+              <linearGradient id="boot-r" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#6ea8ff" />
+                <stop offset="1" stop-color="#b98cff" />
+              </linearGradient>
+              <clipPath id="boot-front"><rect x="0" y="32" width="64" height="32" /></clipPath>
+            </defs>
+            <circle cx="32" cy="32" r="29.5" fill="none" stroke="rgba(130,170,255,.16)" stroke-width="1" />
+            <g class="boot-ring"><circle cx="32" cy="2.5" r="2.4" fill="#fff" /></g>
+            <ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="1.8" opacity="0.5" />
+            <circle cx="32" cy="32" r="12.5" fill="url(#boot-g)" />
+            <g clip-path="url(#boot-front)"><ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="2" /></g>
+          </svg>
+          <div class="boot-name">G.A.L.A.C.T.I.C.</div>
+          <div class="boot-sub" id="boot-sub" aria-hidden="true">Verbindung wird aufgebaut</div>
+        </div>
+
+        <svg class="bt-net" viewBox="0 0 400 216" aria-hidden="true">
           <defs>
-            <radialGradient id="boot-g" cx="35%" cy="32%" r="75%">
-              <stop offset="0" stop-color="#fff" />
-              <stop offset="0.38" stop-color="#6ea8ff" />
-              <stop offset="1" stop-color="#b98cff" />
+            <radialGradient id="bt-pl" cx="30%" cy="8%" r="85%">
+              <stop offset="0" stop-color="#17306a" />
+              <stop offset="1" stop-color="#050912" />
             </radialGradient>
-            <linearGradient id="boot-r" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#6ea8ff" />
-              <stop offset="1" stop-color="#b98cff" />
-            </linearGradient>
-            <clipPath id="boot-front"><rect x="0" y="32" width="64" height="32" /></clipPath>
+            <linearGradient id="bt-gx"><stop offset="0" stop-color="#000" /><stop offset="0.16" stop-color="#fff" /></linearGradient>
+            <linearGradient id="bt-gy" x1="0" y1="0" x2="0" y2="1"><stop offset="0.74" stop-color="#fff" /><stop offset="1" stop-color="#000" /></linearGradient>
+            <mask id="bt-mx"><rect width="400" height="216" fill="url(#bt-gx)" /></mask>
+            <mask id="bt-my"><rect width="400" height="216" fill="url(#bt-gy)" /></mask>
           </defs>
-          <circle cx="32" cy="32" r="29.5" fill="none" stroke="rgba(130,170,255,.16)" stroke-width="1" />
-          <g class="boot-ring"><circle cx="32" cy="2.5" r="2.4" fill="#fff" /></g>
-          <ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="1.8" opacity="0.5" />
-          <circle cx="32" cy="32" r="12.5" fill="url(#boot-g)" />
-          <g clip-path="url(#boot-front)"><ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="2" /></g>
+          <!-- Planet (Horizont) mit Atmosphärensaum – zu den Rändern hin ausgeblendet; Orbitbahn der Relais-Satelliten -->
+          <g mask="url(#bt-mx)"><g mask="url(#bt-my)">
+            <circle class="bt-halo" cx="64" cy="372" r="229" />
+            <circle class="bt-planet" cx="64" cy="372" r="226" />
+          </g></g>
+          <path class="bt-orbit" d="M20 100 C100 24 200 24 290 80" />
+
+          <!-- Verbindungen (pathLength=1: Linie wird per Strich-Versatz „gezeichnet“), darüber laufende Datenpunkte -->
+          <g fill="none">
+            <path class="ln" pathLength="1" style="--d:0.55s;--du:0.35s" d="M72 124 Q84 80 121 54" />
+            <path class="ln" pathLength="1" style="--d:0.9s;--du:0.3s" d="M143 42 Q178 26 203 47" />
+            <path class="ln v" pathLength="1" style="--d:1.3s;--du:0.35s" d="M240 51 C266 51 274 38 302 38" />
+            <path class="ln v" pathLength="1" style="--d:1.44s;--du:0.35s" d="M240 51 C266 51 274 82 302 82" />
+            <path class="ln v" pathLength="1" style="--d:1.58s;--du:0.35s" d="M240 51 C266 51 274 126 302 126" />
+            <path class="ln v" pathLength="1" style="--d:1.72s;--du:0.35s" d="M240 51 C266 51 274 170 302 170" />
+            <path class="fl" pathLength="1" d="M72 124 Q84 80 121 54" />
+            <path class="fl" pathLength="1" d="M143 42 Q178 26 203 47" />
+            <path class="fl" pathLength="1" d="M240 51 C266 51 274 38 302 38" />
+            <path class="fl" pathLength="1" d="M240 51 C266 51 274 82 302 82" />
+            <path class="fl" pathLength="1" d="M240 51 C266 51 274 126 302 126" />
+            <path class="fl" pathLength="1" d="M240 51 C266 51 274 170 302 170" />
+          </g>
+
+          <!-- Bodenstation -->
+          <circle class="pr" cx="64" cy="140" r="11" style="--d:0.35s" />
+          <g class="nd" style="--d:0.35s">
+            <path d="M58 146H70M64 146V139" />
+            <g transform="translate(64 139) rotate(28)">
+              <path class="bg" d="M-9 -11Q0 5 9 -11Z" />
+              <path d="M0 -3V-15" />
+              <circle class="dot" cx="0" cy="-15.5" r="1.3" />
+            </g>
+          </g>
+          <text class="lb sm" x="18" y="198" style="--d:0.35s">BODENSTATION</text>
+
+          <!-- Satelliten-Relais -->
+          <text class="lb sm" x="172" y="14" text-anchor="middle" style="--d:0.9s">SATELLITEN-RELAIS</text>
+          <circle class="pr" cx="124" cy="44" r="12" style="--d:0.9s" />
+          <g class="nd" style="--d:0.9s">
+            <g transform="translate(124 44) rotate(-14)"><g class="bob">
+              <path class="pn" d="M-19 -3H-7V3H-19ZM7 -3H19V3H7Z" />
+              <rect class="bg" x="-5" y="-4" width="10" height="8" rx="1.6" />
+              <path d="M-13 -3V3M13 -3V3M0 -4V-8" />
+              <circle class="dot" cx="0" cy="-9" r="1.1" />
+            </g></g>
+          </g>
+          <circle class="pr v" cx="221" cy="49" r="12" style="--d:1.2s" />
+          <g class="nd v" style="--d:1.2s">
+            <g transform="translate(221 49) rotate(10) scale(0.9)"><g class="bob">
+              <path class="pn" d="M-19 -3H-7V3H-19ZM7 -3H19V3H7Z" />
+              <rect class="bg" x="-5" y="-4" width="10" height="8" rx="1.6" />
+              <path d="M-13 -3V3M13 -3V3M0 -4V-8" />
+              <circle class="dot" cx="0" cy="-9" r="1.1" />
+            </g></g>
+          </g>
+
+          <!-- Datenzentren -->
+          <g class="v">
+            <circle class="pr v" cx="310" cy="38" r="9" style="--d:1.65s" />
+            <g class="nd v" style="--d:1.65s"><rect class="bg" x="302" y="32.5" width="16" height="11" rx="2.5" /><path d="M306 36.5H314M306 39.5H311" /></g>
+            <text class="lb" x="326" y="41" style="--d:1.65s">NASA JPL</text>
+            <circle class="pr v" cx="310" cy="82" r="9" style="--d:1.79s" />
+            <g class="nd v" style="--d:1.79s"><rect class="bg" x="302" y="76.5" width="16" height="11" rx="2.5" /><path d="M306 80.5H314M306 83.5H311" /></g>
+            <text class="lb" x="326" y="85" style="--d:1.79s">IRSA</text>
+            <circle class="pr v" cx="310" cy="126" r="9" style="--d:1.93s" />
+            <g class="nd v" style="--d:1.93s"><rect class="bg" x="302" y="120.5" width="16" height="11" rx="2.5" /><path d="M306 124.5H314M306 127.5H311" /></g>
+            <text class="lb" x="326" y="129" style="--d:1.93s">TREK</text>
+            <circle class="pr v" cx="310" cy="170" r="9" style="--d:2.07s" />
+            <g class="nd v" style="--d:2.07s"><rect class="bg" x="302" y="164.5" width="16" height="11" rx="2.5" /><path d="M306 168.5H314M306 171.5H311" /></g>
+            <text class="lb" x="326" y="173" style="--d:2.07s">ESA</text>
+          </g>
         </svg>
-        <div class="boot-name">G.A.L.A.C.T.I.C.</div>
-        <div class="boot-sub">Atlas wird gestartet</div>
-        <div class="boot-bar"><i></i></div>
+
+        <div class="bt-side">
+          <div class="bt-log" aria-hidden="true">
+            <div class="bt-hd"><span>Uplink</span><span class="bt-live">Live</span></div>
+            <ul>
+              <li class="bt-l ok p1" style="--a:0.15s;--du:0.35s;--ok:0.5s"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">Bodenstation online</span></li>
+              <li class="bt-l ok p1" style="--a:0.55s;--du:0.7s;--ok:1.25s"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">Satelliten-Uplink hergestellt</span></li>
+              <li class="bt-l ok p1" style="--a:1.3s;--du:0.8s;--ok:2.1s"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">Datenkanäle: <b class="bt-n" style="--d:1.65s">NASA JPL</b> · <b class="bt-n" style="--d:1.79s">IRSA</b> · <b class="bt-n" style="--d:1.93s">Trek</b> · <b class="bt-n" style="--d:2.07s">ESA</b></span></li>
+              <li class="bt-l" data-s="cat"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">Sternkatalog geladen</span></li>
+              <li class="bt-l" data-s="orb"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">Bahnen berechnet</span></li>
+              <li class="bt-l" data-s="tex"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">Texturen <span class="bt-i"></span></span></li>
+              <li class="bt-l" data-s="go"><span class="bt-mk"><i class="bt-dot"></i><i class="bt-sp"></i><b class="bt-ck">✓</b></span><span class="bt-tx">System bereit</span></li>
+            </ul>
+          </div>
+          <div class="boot-bar" aria-hidden="true"><i></i></div>
+        </div>
+        <p class="bt-sr" role="status" aria-live="polite" id="boot-sr">Atlas wird gestartet</p>
+        <i class="bt-clock" aria-hidden="true"></i>
       </div>
+      <button class="bt-skip" type="button"><span class="bt-k-fine">Überspringen <kbd>Esc</kbd></span><span class="bt-k-coarse">Tippen zum Überspringen</span></button>
     </div>
 
     <header class="topbar">
@@ -134,24 +362,16 @@
 
     <script type="module" src="/src/main.js"></script>
     <script>
-      // Startbildschirm ausblenden, sobald die App läuft (mind. 0,8 s sichtbar, spätestens nach 8 s)
+      // Notfall-Rückfall: Den Startbildschirm blendet normalerweise src/ui/boot.js aus (und gibt danach das Intro frei).
+      // Läuft dieses Modul nicht (Skriptfehler, sehr altes Gerät), verschwindet die Hülle spätestens nach 12 s trotzdem.
       (() => {
         const boot = document.getElementById('boot');
         if (!boot) return;
-        const t0 = performance.now();
-        let done = false;
-        const hide = () => {
-          if (done) return;
-          done = true;
-          setTimeout(() => {
-            boot.classList.add('done');
-            setTimeout(() => boot.remove(), 900);
-          }, Math.max(0, 800 - (performance.now() - t0)));
-        };
-        // „galactic:ready“ sendet main.js, sobald die Ansichten stehen – Texturen dürfen danach nachladen
-        window.addEventListener('galactic:ready', () => requestAnimationFrame(() => requestAnimationFrame(hide)));
-        window.addEventListener('load', hide);
-        setTimeout(hide, 8000);
+        setTimeout(() => {
+          if (window.__galacticBoot || !boot.isConnected) return;
+          boot.classList.add('done');
+          setTimeout(() => boot.remove(), 900);
+        }, 12000);
       })();
     </script>
   </body>

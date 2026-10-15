@@ -6,7 +6,7 @@
 .map-ui .map-info, .map-ui .map-chip, .map-ui .map-btn, .map-ui .map-hud, .map-ui .map-feature { pointer-events: auto; }
 
 /* gemeinsame Glasflächen */
-.map-info, .map-hud, .map-feature, .map-btn, .map-chip {
+.map-info, .map-hud, .map-feature, .map-btn, .map-chip, .map-select {
   background: var(--surface); border: 1px solid var(--line); backdrop-filter: blur(10px);
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
 }
@@ -28,7 +28,7 @@
 .mi-body dl { display: grid; grid-template-columns: 52px 1fr; gap: 3px 8px; margin: 9px 0 0; }
 .mi-body dt { color: var(--muted); }
 .mi-body dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.mi-body dd.mi-credit, .mi-body dd.mi-names { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.mi-body dd.mi-credit, .mi-body dd.mi-names, .mi-body dd.mi-places { color: var(--muted); font-size: 11px; line-height: 1.4; }
 .mi-hints { list-style: none; margin: 9px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line); color: var(--muted); font-size: 11px; line-height: 1.5; }
 .mi-hints li::before { content: '›'; margin-right: 6px; color: var(--accent); }
 .mi-legend { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11px; color: var(--muted); }
@@ -38,6 +38,12 @@
 .map-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .map-ui .map-chip { padding: 4px 12px; border-radius: 999px; color: var(--muted); font-size: 12px; }
 .map-chip[hidden] { display: none; }
+/* Sprachwahl der Ortsnamen: gleiche Glasfläche wie die Schalter */
+.map-select { padding: 4px 8px; border-radius: 999px; color: var(--text); font: inherit; font-size: 12px; max-width: 124px; pointer-events: auto; cursor: pointer; color-scheme: dark; }
+.map-select[hidden] { display: none; }
+.map-select:disabled { color: var(--muted); opacity: 0.6; cursor: default; }
+.map-select:not(:disabled):hover { border-color: var(--accent); }
+.map-select option { background: #0f1830; color: #e8eefc; }
 .map-ui .map-chip:hover { color: var(--text); border-color: var(--accent); }
 .map-ui .map-chip[aria-pressed='true'] { color: var(--text); background: rgba(110, 168, 255, 0.24); border-color: var(--accent); }
 
