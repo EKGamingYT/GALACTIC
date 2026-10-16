@@ -83,10 +83,24 @@ function start(root) {
     return `${Math.min(tex.loaded, tex.total)}/${tex.total}`;
   };
   const pc = root.querySelector('#boot-pc');
+  // Telemetrie: Signal steigt mit dem Verbindungsaufbau, Latenz ~ Lichtlaufzeit zum Relais + Netz, leichtes Rauschen
+  const tm = { sig: root.querySelector('#tm-sig'), lat: root.querySelector('#tm-lat'), rate: root.querySelector('#tm-rate'), bars: root.querySelectorAll('#tm-bars i') };
+  const fmt = (n, d = 0) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+  function telemetry(p) {
+    if (!tm.sig) return;
+    const j = () => (Math.random() - 0.5);
+    const sig = -138 + 42 * Math.min(1, p * 1.6) + j() * 1.5;
+    tm.sig.textContent = `${fmt(sig, 1)} dBm`;
+    tm.lat.textContent = p < 0.08 ? '– ms' : `${fmt(238 + j() * 6)} ms`;
+    tm.rate.textContent = p < 0.15 ? '0 Mbit/s' : `${fmt(Math.min(1200, 40 + p * 1400) + j() * 20)} Mbit/s`;
+    const level = Math.round(Math.min(1, p * 1.4) * 5);
+    tm.bars.forEach((b, k) => b.classList.toggle('on', k < level));
+  }
   const setBar = (v) => {
     shown = Math.max(shown, Math.min(1, v));
     bar.style.setProperty('--p', shown.toFixed(3));
     if (pc) pc.textContent = `${Math.round(shown * 100)} %`;
+    telemetry(shown);
   };
 
   function begin(k) {
