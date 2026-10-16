@@ -122,12 +122,14 @@ export function createNavigation(viewer, { ellipsoid, radius, isEarth, handler }
     const step = pending * (1 - Math.exp(-dt / 0.09));
     pending -= step;
     zoomAt(Math.exp(step), anchor);
+    scene.requestRender(); // sanftes Zoomen läuft über mehrere Bilder (Render-on-Demand)
   });
 
   const addZoom = (ln, a) => {
     camera.cancelFlight();
     anchor = a ?? null;
     pending = CesiumMath.clamp(pending + ln, -2.5, 2.5);
+    scene.requestRender();
   };
 
   function onWheel(e) {

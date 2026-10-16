@@ -92,6 +92,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       }).catch(() => { placesLoading = false; /* Ortsnamen sind optional */ });
     }
     places.setEnabled(on && placesReady);
+    viewer?.scene.requestRender();
     ui.setPlaces({ available: true, on, tileNames: !!currentBody.maps[layerIdx].tileNames });
   }
 
@@ -195,8 +196,17 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
           .map(([k, f]) => [k, `/textures/skybox/${f}.jpg`])) }),
       // nur in der Entwicklung: erlaubt Screenshots des WebGL-Canvas
       contextOptions: { webgl: { preserveDrawingBuffer: import.meta.env.DEV } },
+      // nur zeichnen, wenn sich etwas ändert (Kamera, neue Kacheln, Ebenenwechsel) – die frei werdende Zeit
+      // geht in das Entschlüsseln/Hochladen von Kacheln; Cesium zeichnet bei Kachel-Ankunft selbst neu
+      requestRenderMode: true,
+      maximumRenderTimeChange: Infinity,
     });
     viewer = v;
+    // Render-on-Demand: nach jeder Bedienung der Kartenleiste (Ebene, Gitter, Namen, Sprache) sicher neu zeichnen
+    const kick = () => { v.scene.requestRender(); setTimeout(() => !v.isDestroyed() && v.scene.requestRender(), 120); };
+    container.addEventListener('click', kick);
+    container.addEventListener('change', kick);
+    disposers.push(() => { container.removeEventListener('click', kick); container.removeEventListener('change', kick); });
     if (import.meta.env.DEV) window.__viewer = v; // nur lokales Testen
     const { scene } = v;
     const { camera } = scene;
