@@ -95,6 +95,23 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     ui.setPlaces({ available: true, on, tileNames: !!currentBody.maps[layerIdx].tileNames });
   }
 
+  // Grobe Kacheln (Stufe 0–1) aller Modi eines Körpers im Hintergrund vorladen → Moduswechsel zeigt sofort ein Bild
+  // (landen im Browser- bzw. Service-Worker-Cache). Nur Trek-/äquirektanguläre Ebenen: 2 + 8 Kacheln je Modus.
+  function prefetchModes(body) {
+    const run = () => {
+      for (const m of body.maps) {
+        if (m.mercator || !m.url) continue;
+        for (let z = 0; z <= Math.min(1, m.maxLevel ?? 1); z++) {
+          const cols = 2 << z, rows = 1 << z;
+          for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+            fetch(m.url.replace('{z}', z).replace('{y}', y).replace('{x}', x), { mode: 'cors', priority: 'low' }).catch(() => {});
+          }
+        }
+      }
+    };
+    (window.requestIdleCallback ?? ((f) => setTimeout(f, 1500)))(run, { timeout: 3000 });
+  }
+
   function setLayer(index) {
     if (!viewer) return;
     viewer.imageryLayers.removeAll();
@@ -111,7 +128,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     // anderen Ebene oder eine eigene Kachelquelle (plain: ohne Abdunkeln, z. B. Grobbild unter dem Satelliten).
     if (layer.underlay !== undefined) {
       const under = typeof layer.underlay === 'object' ? layer.underlay : currentBody.maps[layer.underlay];
-      viewer.imageryLayers.add(new ImageryLayer(makeProvider(under, ellipsoid), under.plain ? {} : { brightness: 0.7, saturation: 0.6 }));
+      // nur grobe Stufen anfordern (Cesium vergrößert darüber hinaus selbst) – halbiert die Anfragen beim Zoomen
+      const coarse = { ...under, maxLevel: Math.min(under.maxLevel ?? 4, under.mercator ? 5 : 3) };
+      viewer.imageryLayers.add(new ImageryLayer(makeProvider(coarse, ellipsoid), under.plain ? {} : { brightness: 0.7, saturation: 0.6 }));
     }
     viewer.imageryLayers.add(new ImageryLayer(makeProvider(layer, ellipsoid)));
     // transparente Zusatzebenen (z. B. Straßen und Gewässer über dem Satellitenbild)
@@ -351,6 +370,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     }
     onStatus?.(isEarth ? 'Tipp: nah heranzoomen (unter ~2,5 km Höhe) für 3D-Gelände und Gebäude' : '');
     setLayer(0);
+    prefetchModes(body);
   }
 
   return { show, setLayer, resize: () => viewer?.resize() };
