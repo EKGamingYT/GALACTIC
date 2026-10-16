@@ -57,6 +57,29 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 };
 
+// Sicherheits-Header für alle ausgelieferten Seiten/Dateien nach erfolgreicher Anmeldung.
+// CSP: Cesium erzeugt intern Code per new Function → 'unsafe-eval'; das einzige Inline-Skript (Notfall-Rückfall in
+// index.html) ist per Hash freigegeben (über den Text mit LF-Zeilenenden) – bei Änderung den Hash neu berechnen.
+const INLINE_SCRIPT_HASH = "'sha256-rwv+14VeWXqL/Ll7eqaCMsMrQpQ8h9rIhV7YejIBLMs='";
+const SITE_HEADERS = {
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-eval' ${INLINE_SCRIPT_HASH}`,
+    "worker-src 'self' blob:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https:",
+    "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+  ].join('; '),
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+};
+
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 function loginPage(nextPath, error = '', status = 401) {
@@ -122,7 +145,7 @@ export default async function middleware(request) {
     });
   }
 
-  if (await validSession(request, secret)) return next();
+  if (await validSession(request, secret)) return next({ headers: SITE_HEADERS });
 
   // Seitenaufrufe bekommen die Anmeldeseite, alles andere (Skripte, Daten, API) nur 401
   const wantsHtml = (request.headers.get('accept') || '').includes('text/html');
