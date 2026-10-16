@@ -8,6 +8,7 @@ import { moonBodies } from './views/moons.js';
 import { STARS, starBody } from './views/stars.js';
 import { SYSTEMS } from './data/systems.js';
 import { createSystemPicker, MAX_LY } from './ui/systemPicker.js';
+import { openSiteCatalog, sitesForBody } from './ui/siteCatalog.js';
 
 // Kachel-Zwischenspeicher (Service Worker, nur im fertigen Build – im Dev-Server stört er Hot-Reload)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
@@ -280,6 +281,10 @@ function wirePlanetButtons() {
   }));
 }
 
+// reale Raumfahrt-Orte werden über die Karten-ID bzw. die Körper-ID zugeordnet
+const siteBodyId = (body) => (sitesForBody(mapIdFor(body) || '').length ? mapIdFor(body) : body.id);
+const siteCountFor = (body) => sitesForBody(siteBodyId(body)).length;
+
 function selectBody(body) {
   if (body.id === SOLAR_SYSTEM.id) return showSystemPanel();
   if (body.isSystem) return showStarSystemPanel(body);
@@ -292,6 +297,9 @@ function selectBody(body) {
     ${body.description ? `<p class="desc">${body.description}</p>` : ''}
     ${TEXTURES[body.id]?.artistic ? '<p class="muted small">Oberfläche: künstlerische Darstellung – es gibt noch keine Nahaufnahmen.</p>' : ''}
     ${bodyDetails(body)}
+    ${(() => { const n = siteCountFor(body); return n ? `<p class="eyebrow">Raumfahrt-Orte <span class="sp-badge">${n}</span></p>
+      <p class="muted small" style="margin:-2px 0 8px">Landeplätze, Rover, Instrumente${body.id === 'earth' || body.id === 'moon' ? ', Stationen' : ''} – echte Missionen.
+      <button class="link-btn" data-act="sitecat">Katalog öffnen</button></p>` : ''; })()}
     ${!body.isMoon && !body.isStar && !body.isExoplanet && moonsOf(body.id).length
       ? `<p class="eyebrow">Monde (${moonsOf(body.id).length} im Atlas)</p>${moonChips(body.id)}` : ''}
     <div class="actions">
@@ -307,6 +315,7 @@ function selectBody(body) {
       ? `Quelle: JPL Small-Body Database (${body.fullname}). Bahn als Zweikörper-Näherung – bei Kometen über Jahrzehnte ungenau.`
       : 'Quelle: NASA Planetary Fact Sheet · Bahnen: JPL (Standish)'}</p>`);
   panel.querySelector('[data-act="focus"]')?.addEventListener('click', () => system.focus(body.id));
+  panel.querySelector('[data-act="sitecat"]')?.addEventListener('click', () => openSiteCatalog(siteBodyId(body), body.name));
   wireMoonChips();
   wirePlanetButtons();
   updatePanelLive();

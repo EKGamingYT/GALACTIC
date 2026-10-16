@@ -732,3 +732,37 @@ input:focus-visible, canvas:focus-visible, .cesium-widget:focus-visible { outlin
 .sp-reset { padding: 5px 10px; font-size: 11.5px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 8px; }
 .sp-reset:hover { color: #fff; border-color: var(--line-strong); }
 .sp-count { margin: -2px 2px 0 !important; }
+
+/* Textknopf im Panel (z. B. „Katalog öffnen") */
+.link-btn { padding: 0; color: var(--accent); font: inherit; background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn:hover { color: #fff; }
+
+/* --- Katalog der Raumfahrt-Orte (Vollbild-Einblendung) ---------------------------------------------- */
+.sc-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
+  background: rgba(2, 4, 10, 0.72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: sc-fade 0.2s var(--ease); }
+@keyframes sc-fade { from { opacity: 0; } }
+.sc-panel { display: flex; flex-direction: column; width: min(960px, 100%); max-height: calc(100dvh - 36px); overflow: hidden;
+  background: var(--surface-strong); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.sc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid var(--line-soft); }
+.sc-ey { margin: 0; color: var(--warm); font-size: 10.5px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; }
+.sc-top h2 { margin: 3px 0 2px; font-family: var(--font-display); font-size: 22px; }
+.sc-sub { margin: 0; color: var(--muted); font-size: 12.5px; }
+.sc-x { width: 34px; height: 34px; flex: none; color: var(--muted); font-size: 22px; background: none; border: 1px solid transparent; border-radius: 9px; cursor: pointer; }
+.sc-x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); border-color: var(--line); }
+.sc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 20px; border-bottom: 1px solid var(--line-soft); }
+.sc-leg { position: relative; padding-left: 15px; font-size: 12px; color: var(--text-2); }
+.sc-leg::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 16px 20px 20px; overflow-y: auto; }
+.sc-card { padding: 13px 14px; background: var(--surface-2); border: 1px solid var(--line-soft); border-left: 3px solid var(--c); border-radius: 11px; }
+.sc-head { display: flex; align-items: center; gap: 8px; }
+.sc-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.sc-card h3 { margin: 0; font-size: 14.5px; }
+.sc-purpose { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.sc-facts { margin: 10px 0 0; display: flex; flex-direction: column; gap: 3px; }
+.sc-row { display: flex; gap: 8px; font-size: 12px; }
+.sc-row dt { flex: none; width: 82px; color: var(--muted); }
+.sc-row dd { margin: 0; color: var(--text); }
+.sc-note { margin: 9px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); font-style: italic; }
+.sc-src { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
+.sc-src a { color: var(--accent); }
+@media (max-width: 560px) { .sc-grid { grid-template-columns: 1fr; } }

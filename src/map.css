@@ -154,3 +154,29 @@
 .pl-item small, .pl-route { color: var(--muted, #8a97b5); font-size: 11.5px; }
 .pl-form { display: flex; flex-direction: column; gap: 7px; margin-bottom: 8px; padding: 10px; border: 1px solid rgba(110, 168, 255, 0.35); border-radius: 10px; background: rgba(110, 168, 255, 0.05); }
 .pl-form label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-2, #c3cde6); }
+
+/* --- Reale Raumfahrt-Orte ------------------------------------------------------------------------- */
+.sites-toggle {
+  position: absolute; top: 54px; right: 16px; pointer-events: auto; padding: 7px 13px; font: 600 12px Inter, system-ui, sans-serif;
+  color: var(--text-2, #c3cde6); background: var(--surface, rgba(11, 17, 33, 0.8)); border: 1px solid var(--line, rgba(130, 170, 255, 0.25)); border-radius: 999px;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); cursor: pointer;
+}
+.sites-toggle.on { color: #fff; border-color: #6ea8ff; }
+.site-pop {
+  position: absolute; bottom: 70px; left: 16px; width: min(320px, calc(100% - 32px)); pointer-events: auto; padding: 13px 15px;
+  color: var(--text, #e8eefc); background: var(--surface, rgba(11, 17, 33, 0.9)); border: 1px solid var(--line, rgba(130, 170, 255, 0.2)); border-radius: 13px;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+}
+.site-pop[hidden] { display: none; }
+.site-x { position: absolute; top: 9px; right: 10px; width: 26px; height: 26px; color: var(--muted, #8a97b5); font-size: 17px; background: none; border: 0; border-radius: 7px; cursor: pointer; }
+.site-x:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.site-kind { margin: 0 0 3px; padding-left: 10px; position: relative; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c, #6ea8ff); }
+.site-kind::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 3px; border-radius: 2px; background: var(--c, #6ea8ff); }
+.site-pop h3 { margin: 0 0 5px; font-size: 15px; padding-right: 24px; }
+.site-meta { margin: 1px 0; font-size: 12px; color: var(--muted, #8a97b5); }
+.site-desc { margin: 7px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-2, #c3cde6); }
+.site-note { margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted, #8a97b5); font-style: italic; }
+.site-actions { display: flex; gap: 10px; align-items: center; margin-top: 11px; }
+.site-actions button { padding: 6px 12px; color: #04060d; font: 600 12px Inter, system-ui, sans-serif; background: linear-gradient(90deg, #6ea8ff, #b98cff); border: 0; border-radius: 8px; cursor: pointer; }
+.site-actions a { color: #9fc4ff; font-size: 12px; } .site-actions .site-src { color: var(--muted, #8a97b5); font-size: 11px; }
+@media (max-width: 720px) { .sites-toggle { top: auto; bottom: 118px; } .site-pop { bottom: 118px; } }

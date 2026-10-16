@@ -20,6 +20,7 @@ import { createNames, hasNames } from './map/names.js';
 import { createPlaces } from './map/places.js';
 import { createMapUI } from './map/ui.js';
 import { createPlanner } from './map/planner.js';
+import { createSitesLayer } from './map/sitesLayer.js';
 import { metersPerPixel, niceKm, toLatLon } from './map/geo.js';
 
 Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kacheln
@@ -61,6 +62,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let layerIdx = 0;
   let nav = null;
   let planner = null;
+  let sitesLayer = null;
   let disposers = [];
 
   // Gitter liegt immer ganz oben; wird bei jedem Ebenenwechsel neu gesetzt
@@ -295,6 +297,19 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     // Stationsplanung (Kreise, Routen, Werkzeuge); aktive Werkzeuge bekommen Kartenklicks zuerst
     planner = createPlanner({ viewer: v, body, ellipsoid, root: uiRoot, hasTerrain: isEarth });
     disposers.push(() => { planner?.dispose(); planner = null; });
+    // Reale Raumfahrt-Orte (Landeplätze, Rover, Instrumente, Stationen) als eigene umschaltbare Ebene
+    sitesLayer = createSitesLayer({ viewer: v, body, ellipsoid, root: uiRoot, hasTerrain: isEarth });
+    if (sitesLayer.count) {
+      const sb = document.createElement('button');
+      sb.className = 'sites-toggle on';
+      sb.type = 'button';
+      sb.textContent = `◆ Orte (${sitesLayer.count})`;
+      sb.title = 'Reale Landeplätze, Rover und Instrumente ein-/ausblenden';
+      sb.setAttribute('aria-pressed', 'true');
+      sb.onclick = () => { const on = sb.classList.toggle('on'); sb.setAttribute('aria-pressed', String(on)); sitesLayer.setVisible(on); };
+      uiRoot.appendChild(sb);
+    }
+    disposers.push(() => { sitesLayer?.dispose(); sitesLayer = null; });
     handler.setInputAction((e) => {
       clearTimeout(clickTimer);
       const pos = { x: e.position.x, y: e.position.y };
@@ -305,6 +320,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       }
       clickTimer = setTimeout(() => {
         if (viewer !== v) return;
+        if (sitesLayer?.pickAt(pos)) return; // realer Raumfahrt-Ort hat Vorrang vor IAU-Namen
         const f = namesReady && prefs.names ? names.fromPick(scene.pick(pos)) : null;
         if (f) {
           names.select(f);
