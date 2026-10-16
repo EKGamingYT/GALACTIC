@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vercel/functions": "^3.10.1",
     "cesium": "1.146.0",
     "three": "0.186.1"
   },
