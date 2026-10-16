@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+
+# lokale Zugangsdaten – nie committen
+docs/EINRICHTUNG-ZUGANG.md
+.env*
