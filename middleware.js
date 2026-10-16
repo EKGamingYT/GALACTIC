@@ -61,6 +61,16 @@ const SECURITY_HEADERS = {
 // CSP: Cesium erzeugt intern Code per new Function → 'unsafe-eval'; das einzige Inline-Skript (Notfall-Rückfall in
 // index.html) ist per Hash freigegeben (über den Text mit LF-Zeilenenden) – bei Änderung den Hash neu berechnen.
 const INLINE_SCRIPT_HASH = "'sha256-rwv+14VeWXqL/Ll7eqaCMsMrQpQ8h9rIhV7YejIBLMs='";
+// Feste Liste der Server, mit denen die App spricht (Kacheln, Geländedaten, Kataloge, Lexikon, Datenbank).
+// Enger als "https:" – falls je ein XSS entstünde, kann er Daten nicht an beliebige Fremdhosts senden.
+const HOSTS = [
+  'https://cadwpentvihjhxtbfbav.supabase.co', 'https://trek.nasa.gov', 'https://gibs.earthdata.nasa.gov',
+  'https://tiles.maps.eox.at', 'https://s2maps.eu', 'https://tile.openstreetmap.org', 'https://tile.opentopomap.org',
+  'https://s3.amazonaws.com', 'https://nominatim.openstreetmap.org', 'https://de.wikipedia.org',
+  'https://overpass-api.de', 'https://overpass.kumi.systems', 'https://planetarynames.wr.usgs.gov',
+  'https://simbad.cds.unistra.fr', 'https://gea.esac.esa.int', 'https://exoplanetarchive.ipac.caltech.edu',
+  'https://www.cosmos.esa.int',
+].join(' ');
 const SITE_HEADERS = {
   'Content-Security-Policy': [
     "default-src 'self'",
@@ -68,8 +78,8 @@ const SITE_HEADERS = {
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: blob: https:",
-    "connect-src 'self' https:",
+    `img-src 'self' data: blob: ${HOSTS}`,
+    `connect-src 'self' ${HOSTS}`,
     "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
   ].join('; '),
   'X-Frame-Options': 'DENY',
@@ -128,7 +138,11 @@ export default async function middleware(request) {
     if (request.method !== 'POST') return loginPage('/', '', 200);
     // nur Formulare von dieser Seite (CSRF-Schutz für die Anmeldung)
     const origin = request.headers.get('origin');
-    if (origin && origin !== url.origin) return loginPage('/', 'Ungültige Anfrage.', 403);
+    // nur gleicher Ursprung: Origin-Abgleich und, wo vorhanden, Sec-Fetch-Site (deckt auch fehlenden Origin ab)
+    const fetchSite = request.headers.get('sec-fetch-site');
+    if ((origin && origin !== url.origin) || (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none')) {
+      return loginPage('/', 'Ungültige Anfrage.', 403);
+    }
     let form;
     try { form = await request.formData(); } catch { return loginPage('/', 'Ungültige Anfrage.', 400); }
     const given = String(form.get('password') ?? '').slice(0, 200);

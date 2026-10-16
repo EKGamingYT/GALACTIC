@@ -27,8 +27,9 @@ create table private.station_keys (
   last_used_at timestamptz
 );
 
-create table private.failed_attempts (ts timestamptz not null default now(), kind text not null);
+create table private.failed_attempts (ts timestamptz not null default now(), kind text not null, bucket bytea);
 create index on private.failed_attempts (ts);
+create index on private.failed_attempts (bucket, ts);
 
 create table public.stations (
   id uuid primary key default gen_random_uuid(),
@@ -67,38 +68,39 @@ create policy "lesen" on public.routes for select to anon, authenticated using (
 -- keine insert/update/delete-Policies: direkter Schreibzugriff ist für alle Rollen gesperrt
 
 -- --- Prüfungen --------------------------------------------------------------------------------------
--- Bremse gegen Durchprobieren: > 30 Fehlversuche in 10 Minuten (systemweit) → vorübergehend gesperrt
-create function private.throttle() returns void language plpgsql security definer set search_path = '' as $$
+-- Bremse gegen Durchprobieren: >= 20 Fehlversuche je vorgelegtem Schlüssel/Token in 10 Minuten → gesperrt.
+-- Pro Zugangsmittel (nicht global), damit niemand mit dem öffentlichen Key alle Organisationen aussperren kann.
+create function private.throttle(p_bucket bytea) returns void language plpgsql security definer set search_path = '' as $$
 begin
   delete from private.failed_attempts where ts < now() - interval '1 day';
-  if (select count(*) from private.failed_attempts where ts > now() - interval '10 minutes') > 30 then
+  if (select count(*) from private.failed_attempts where bucket = p_bucket and ts > now() - interval '10 minutes') >= 20 then
     raise exception 'Zu viele Fehlversuche – bitte später erneut versuchen' using errcode = 'P0001';
   end if;
 end $$;
 
 create function private.agency_for_key(p_key text) returns uuid language plpgsql security definer set search_path = '' as $$
-declare v_agency uuid;
+declare v_agency uuid; v_bucket bytea := extensions.digest(coalesce(p_key, ''), 'sha256');
 begin
-  perform private.throttle();
+  perform private.throttle(v_bucket);
   if p_key is null or char_length(p_key) not between 20 and 200 then v_agency := null;
   else
     update private.station_keys set last_used_at = now()
-      where key_hash = extensions.digest(p_key, 'sha256') and active
+      where key_hash = v_bucket and active
       returning agency_id into v_agency;
   end if;
   if v_agency is null then
     -- KEIN raise: eine Exception würde den Protokolleintrag zurückrollen → Aufrufer geben null zurück
-    insert into private.failed_attempts (kind) values ('key');
+    insert into private.failed_attempts (kind, bucket) values ('key', v_bucket);
   end if;
   return v_agency;
 end $$;
 
 create function private.is_admin(p_token text) returns boolean language plpgsql security definer set search_path = '' as $$
+declare v_bucket bytea := extensions.digest(coalesce(p_token, ''), 'sha256');
 begin
-  perform private.throttle();
-  if p_token is null or char_length(p_token) > 200
-     or not exists (select 1 from private.admin_tokens where hash = extensions.digest(p_token, 'sha256')) then
-    insert into private.failed_attempts (kind) values ('admin');
+  perform private.throttle(v_bucket);
+  if p_token is null or char_length(p_token) > 200 or not exists (select 1 from private.admin_tokens where hash = v_bucket) then
+    insert into private.failed_attempts (kind, bucket) values ('admin', v_bucket);
     return false;
   end if;
   return true;
@@ -146,6 +148,7 @@ create function public.route_save(p_key text, p jsonb) returns uuid language plp
 declare v_agency uuid := private.agency_for_key(p_key); v_id uuid; pt jsonb;
 begin
   if v_agency is null then return null; end if;
+  if jsonb_typeof(p) <> 'object' or pg_column_size(p) > 24000 then raise exception 'Ungültige Daten'; end if;
   if jsonb_typeof(p->'points') <> 'array' then raise exception 'Ungültige Punkte'; end if;
   for pt in select * from jsonb_array_elements(p->'points') loop
     if jsonb_typeof(pt) <> 'array' or jsonb_array_length(pt) <> 2
