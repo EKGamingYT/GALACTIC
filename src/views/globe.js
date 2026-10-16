@@ -19,6 +19,7 @@ import { createNavigation } from './map/navigation.js';
 import { createNames, hasNames } from './map/names.js';
 import { createPlaces } from './map/places.js';
 import { createMapUI } from './map/ui.js';
+import { createPlanner } from './map/planner.js';
 import { metersPerPixel, niceKm, toLatLon } from './map/geo.js';
 
 Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kacheln
@@ -59,6 +60,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let placesLoading = false;
   let layerIdx = 0;
   let nav = null;
+  let planner = null;
   let disposers = [];
 
   // Gitter liegt immer ganz oben; wird bei jedem Ebenenwechsel neu gesetzt
@@ -290,9 +292,17 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     // --- Klick: Name (Merkmalskarte) oder beliebiger Punkt (Punktabfrage) ---
     // Verzögert, damit ein Doppelklick (Hinfliegen) keine zwei Abfragen auslöst
     let clickTimer = 0;
+    // Stationsplanung (Kreise, Routen, Werkzeuge); aktive Werkzeuge bekommen Kartenklicks zuerst
+    planner = createPlanner({ viewer: v, body, ellipsoid, root: uiRoot, hasTerrain: isEarth });
+    disposers.push(() => { planner?.dispose(); planner = null; });
     handler.setInputAction((e) => {
       clearTimeout(clickTimer);
       const pos = { x: e.position.x, y: e.position.y };
+      if (planner?.active()) {
+        const cart = scene.globe.pick(camera.getPickRay(pos), scene) ?? camera.pickEllipsoid(pos, ellipsoid);
+        if (cart) { const { lat, lon } = toLatLon(cart, ellipsoid); planner.click(lat, lon); }
+        return;
+      }
       clickTimer = setTimeout(() => {
         if (viewer !== v) return;
         const f = namesReady && prefs.names ? names.fromPick(scene.pick(pos)) : null;
