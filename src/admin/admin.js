@@ -1,396 +1,254 @@
-// Admin-Panel für das Stationsschlüssel-System (eigene Seite admin.html).
-// Sicherheit:
-//  - Das Admin-Token liegt NUR in sessionStorage (endet mit dem Tab), nie in localStorage/URL/Cookies.
-//  - Jede Prüfung passiert serverseitig in den RPCs (supabase/schema.sql); Fehlversuche werden dort
-//    protokolliert und gebremst – das Panel selbst ist nur eine Oberfläche.
-//  - Alle Daten aus der Datenbank landen ausschließlich per textContent/value im DOM (kein innerHTML → kein XSS).
+// Admin-Panel: Organisationen mit vollen Stammdaten anlegen/bearbeiten/löschen, Stationsschlüssel ausgeben
+// und sperren, sowie ALLE Stationen und Routen aller Organisationen sehen und verwalten.
+// Admin-Token nur in sessionStorage (endet mit dem Tab). Gesamtes DOM per textContent/Properties (kein innerHTML) → XSS-sicher.
 import './admin.css';
-import { adminOverview, adminCreateAgency, adminIssueKey, adminSetKeyActive } from '../lib/stationsApi.js';
+import {
+  adminOverview, adminCreateAgency, adminUpdateAgency, adminDeleteAgency, adminIssueKey, adminSetKeyActive,
+  adminDeleteStation, adminDeleteRoute, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS,
+} from '../lib/stationsApi.js';
 
 const STORE = 'galactic_admin_token';
-const app = document.getElementById('app');
+let token = null;
+let data = null;
 
-// --- sessionStorage (kann in privaten Fenstern o. ä. werfen) -----------------------------------------
-const tokenStore = {
-  get() { try { return sessionStorage.getItem(STORE); } catch { return null; } },
-  set(v) { try { sessionStorage.setItem(STORE, v); } catch { /* Sitzung bleibt dann nur im Speicher */ } },
-  clear() { try { sessionStorage.removeItem(STORE); } catch { /* ignorieren */ } },
-};
+const app = document.getElementById('app') || document.body;
 
-let token = tokenStore.get();
-let data = null; // letzte Übersicht
-
-// --- DOM-Helfer: Text immer über textContent, Attribute über Properties --------------------------------
-function el(tag, props = {}, ...children) {
-  const node = document.createElement(tag);
+const el = (tag, props = {}, ...kids) => {
+  const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
-    if (v == null || v === false) continue;
-    if (k === 'class') node.className = v;
-    else if (k === 'text') node.textContent = v;
-    else if (k === 'dataset') Object.assign(node.dataset, v);
-    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
-    else if (k in node) node[k] = v;
-    else node.setAttribute(k, v);
+    if (v == null) continue;
+    if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
   }
-  for (const c of children.flat()) {
-    if (c == null || c === false) continue;
-    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  for (const c of kids) if (c != null) n.append(c);
+  return n;
+};
+const fmtDate = (s) => { if (!s) return 'nie'; try { return new Date(s).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }); } catch { return s; } };
+const fmtDeg = (lat, lon) => (lat == null ? '–' : `${Math.abs(lat).toFixed(3)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(3)}° ${lon >= 0 ? 'O' : 'W'}`);
+const fmtKm = (m) => (m == null ? '–' : m >= 1000 ? `${(m / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} km` : `${Math.round(m)} m`);
+
+function getToken() { try { return sessionStorage.getItem(STORE); } catch { return null; } }
+function setToken(t) { try { t ? sessionStorage.setItem(STORE, t) : sessionStorage.removeItem(STORE); } catch { /* egal */ } token = t; }
+
+async function refresh() {
+  const res = await adminOverview(token);
+  if (res == null) { setToken(null); renderLogin('Sitzung abgelaufen oder Token ungültig – bitte neu anmelden.'); return false; }
+  data = res;
+  renderApp();
+  return true;
+}
+
+// Admin-Aktion ausführen, Meldung zeigen, neu laden; null = Token ungültig → Anmeldung
+async function run(btn, fn, okMsg) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fn();
+    if (r === null) { setToken(null); renderLogin('Token ungültig – bitte neu anmelden.'); return null; }
+    if (okMsg) toast(okMsg);
+    await refresh();
+    return r;
+  } catch (e) {
+    toast(e.message || 'Fehler', true);
+    if (btn) btn.disabled = false;
+    return undefined;
   }
-  return node;
 }
 
-function setMsg(node, text, kind = 'error') {
-  node.className = `msg ${kind}`;
-  node.textContent = text || '';
+let toastTimer = 0;
+function toast(msg, bad = false) {
+  let t = document.querySelector('.adm-toast');
+  if (!t) { t = el('div', { class: 'adm-toast' }); document.body.append(t); }
+  t.textContent = msg;
+  t.dataset.bad = bad ? '1' : '';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
 }
 
-const dateFmt = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
-function fmtDate(v) {
-  if (!v) return 'nie';
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '–' : dateFmt.format(d);
+// --- Anmeldung -------------------------------------------------------------------------------------
+function renderLogin(error = '') {
+  app.replaceChildren(
+    el('div', { class: 'adm-top' }, el('span', { class: 'adm-brand' }, 'G.A.L.A.C.T.I.C.', el('span', { text: 'Admin' }))),
+    el('main', { class: 'adm-login' },
+      el('form', { class: 'adm-card', onsubmit: async (e) => {
+        e.preventDefault();
+        const t = e.target.querySelector('input').value.trim();
+        if (!t) return;
+        setToken(t);
+        e.target.querySelector('button').disabled = true;
+        await refresh();
+      } },
+        el('h1', { text: 'Anmeldung' }),
+        el('p', { class: 'muted small', text: 'Admin-Token eingeben. Fehlversuche werden serverseitig gebremst. Das Token wird nur in diesem Browser-Tab gehalten (sessionStorage).' }),
+        el('label', { text: 'Admin-Token', for: 'tok' }),
+        el('input', { id: 'tok', type: 'password', autocomplete: 'off', autofocus: '', maxlength: '200' }),
+        el('button', { type: 'submit' }, 'Anmelden'),
+        error ? el('p', { class: 'adm-err', role: 'alert', text: error }) : null,
+      )),
+  );
+  app.querySelector('#tok')?.focus();
 }
 
-// Serverfehler in verständliche Meldungen übersetzen (Text kommt aus der DB → nur als textContent ausgeben)
-function errorText(err) {
-  const m = String(err?.message || err || '');
-  if (/failed to fetch|networkerror|load failed/i.test(m)) return 'Server nicht erreichbar – Internetverbindung prüfen.';
-  if (/duplicate key|unique/i.test(m)) return 'Eine Organisation mit diesem Namen existiert bereits.';
-  if (/check constraint/i.test(m)) return 'Eingabe ungültig (Länge prüfen: Name 2–120, Land bis 80, Bezeichnung bis 120 Zeichen).';
-  return m || 'Unbekannter Fehler.';
+// --- Hauptansicht ----------------------------------------------------------------------------------
+function statRow() {
+  const active = data.keys.filter((x) => x.active).length;
+  const stat = (label, value, tone) => el('div', { class: 'adm-stat', 'data-tone': tone || '' }, el('b', { text: String(value) }), el('span', { text: label }));
+  return el('div', { class: 'adm-stats' },
+    stat('Organisationen', data.agencies.length),
+    stat('Schlüssel aktiv', `${active}/${data.keys.length}`),
+    stat('Stationen', data.stations.length),
+    stat('Routen', data.routes.length),
+    stat('Fehlversuche Schlüssel (24 h)', data.activity.failed_key_24h, data.activity.failed_key_24h > 0 ? 'warn' : ''),
+    stat('Fehlversuche Admin (24 h)', data.activity.failed_admin_24h, data.activity.failed_admin_24h > 0 ? 'danger' : ''),
+  );
 }
 
-async function busy(button, fn) {
-  const prev = button.textContent;
-  button.disabled = true;
-  button.textContent = 'Bitte warten …';
-  try { return await fn(); } finally { button.disabled = false; button.textContent = prev; }
-}
-
-// --- Abmelden / Sitzung ungültig -------------------------------------------------------------------------
-function logout(message) {
-  token = null;
-  data = null;
-  tokenStore.clear();
-  renderLogin(message);
-}
-
-// Antwort null/false bei Admin-RPCs = Token (inzwischen) ungültig → zurück zur Anmeldung
-function sessionLost() {
-  logout('Sitzung ungültig – das Admin-Token wurde nicht (mehr) akzeptiert. Bitte erneut anmelden.');
-}
-
-// --- Anmeldung -------------------------------------------------------------------------------------------
-function renderLogin(message) {
-  const input = el('input', {
-    id: 'adm-token', type: 'password', autocomplete: 'current-password', required: true, maxLength: 200,
-    spellcheck: false, autocapitalize: 'off',
-  });
-  const msg = el('p', { class: 'msg', role: 'alert', 'aria-live': 'polite' });
-  const submit = el('button', { class: 'btn primary', type: 'submit', text: 'Anmelden' });
-
-  const form = el('form', { class: 'form', onsubmit: async (e) => {
+function agencyForm(agency, onDone) {
+  const inputs = {};
+  const form = el('form', { class: 'adm-form' });
+  for (const f of AGENCY_FIELDS) {
+    const inp = f.textarea
+      ? el('textarea', { rows: '2', maxlength: '2000' })
+      : el('input', { type: f.type || 'text', maxlength: '200', ...(f.required ? { required: '' } : {}), placeholder: f.placeholder || '' });
+    inp.value = agency ? (agency[f.key] ?? '') : '';
+    inputs[f.key] = inp;
+    form.append(el('label', { class: f.textarea ? 'wide' : '' }, el('span', { text: f.label + (f.required ? ' *' : '') }), inp));
+  }
+  form.append(el('div', { class: 'adm-row wide' },
+    el('button', { type: 'submit' }, agency ? 'Speichern' : 'Organisation anlegen'),
+    agency ? el('button', { type: 'button', class: 'ghost', onclick: () => onDone?.() }, 'Abbrechen') : null));
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const value = input.value.trim();
-    if (!value) { setMsg(msg, 'Bitte das Admin-Token eingeben.'); return; }
-    setMsg(msg, '');
-    await busy(submit, async () => {
-      try {
-        const res = await adminOverview(value);
-        if (!res) {
-          setMsg(msg, 'Admin-Token ungültig.');
-          input.select();
-          return;
-        }
-        token = value;
-        tokenStore.set(value);
-        data = res;
-        renderDashboard();
-      } catch (err) {
-        setMsg(msg, errorText(err));
-      }
-    });
-  } },
-    el('div', { class: 'field' }, el('label', { htmlFor: 'adm-token', text: 'Admin-Token' }), input),
-    submit,
-    msg,
-  );
-
-  app.replaceChildren(
-    header(false),
-    el('main', { class: 'adm-main' },
-      el('section', { class: 'card login' },
-        el('h2', { text: 'Anmeldung' }),
-        el('div', { class: 'form' },
-          el('p', { class: 'muted small', text: 'Das Token wird nur für diesen Browser-Tab gespeichert (sessionStorage) und beim Abmelden bzw. Schließen des Tabs verworfen.' }),
-          el('p', { class: 'msg info small', text: 'Hinweis: Fehlversuche werden serverseitig protokolliert und gebremst – nach zu vielen Versuchen ist die Anmeldung vorübergehend gesperrt.' }),
-          form,
-        ),
-      ),
-    ),
-  );
-  if (message) setMsg(msg, message);
-  input.focus();
-}
-
-function header(loggedIn) {
-  return el('header', { class: 'adm-top' },
-    el('div', { class: 'adm-brand' }, 'G.A.L.A.C.T.I.C.', el('span', { text: 'Stationsschlüssel · Admin' })),
-    el('div', { class: 'spacer' }),
-    loggedIn && el('button', { class: 'btn sm', type: 'button', text: 'Aktualisieren', onclick: (e) => refresh(e.currentTarget) }),
-    loggedIn && el('button', { class: 'btn sm danger', type: 'button', text: 'Abmelden', onclick: () => logout() }),
-  );
-}
-
-// --- Dashboard -------------------------------------------------------------------------------------------
-// Feste Bereiche, damit ein neu ausgegebener Schlüssel beim Neuladen der Übersicht nicht verschwindet
-let overviewBox, overviewMsg, secretBox, keyAgencySelect;
-
-function renderDashboard() {
-  overviewMsg = el('p', { class: 'msg', role: 'status', 'aria-live': 'polite' });
-  overviewBox = el('div', { class: 'agencies' });
-  secretBox = el('div', { 'aria-live': 'polite' });
-
-  app.replaceChildren(
-    header(true),
-    el('main', { class: 'adm-main' },
-      el('div', { class: 'grid-2' }, agencyForm(), keyForm()),
-      secretBox,
-      el('section', { class: 'card' },
-        el('div', { class: 'overview-head' }, el('h2', { text: 'Organisationen & Schlüssel' })),
-        overviewMsg,
-        overviewBox,
-      ),
-    ),
-  );
-  renderOverview();
-}
-
-async function refresh(button) {
-  const run = async () => {
-    try {
-      const res = await adminOverview(token);
-      if (!res) { sessionLost(); return false; }
-      data = res;
-      renderOverview();
-      return true;
-    } catch (err) {
-      setMsg(overviewMsg, errorText(err));
-      return false;
-    }
-  };
-  return button ? busy(button, run) : run();
-}
-
-function agencyForm() {
-  const name = el('input', { id: 'adm-ag-name', type: 'text', required: true, minLength: 2, maxLength: 120, autocomplete: 'off' });
-  const country = el('input', { id: 'adm-ag-country', type: 'text', maxLength: 80, autocomplete: 'off', placeholder: 'optional' });
-  const msg = el('p', { class: 'msg', role: 'status', 'aria-live': 'polite' });
-  const submit = el('button', { class: 'btn primary', type: 'submit', text: 'Organisation anlegen' });
-
-  return el('section', { class: 'card' },
-    el('h2', { text: 'Organisation anlegen' }),
-    el('form', { class: 'form', onsubmit: async (e) => {
-      e.preventDefault();
-      const n = name.value.trim();
-      const c = country.value.trim();
-      if (n.length < 2) { setMsg(msg, 'Der Name muss mindestens 2 Zeichen lang sein.'); return; }
-      setMsg(msg, '');
-      await busy(submit, async () => {
-        try {
-          const id = await adminCreateAgency(token, n, c);
-          if (!id) { sessionLost(); return; }
-          name.value = '';
-          country.value = '';
-          if (await refresh()) {
-            setMsg(msg, `Organisation „${n}“ angelegt.`, 'ok');
-            if (keyAgencySelect) keyAgencySelect.value = id;
-          }
-        } catch (err) {
-          setMsg(msg, errorText(err));
-        }
-      });
-    } },
-      el('div', { class: 'field' }, el('label', { htmlFor: 'adm-ag-name', text: 'Name' }), name),
-      el('div', { class: 'field' }, el('label', { htmlFor: 'adm-ag-country', text: 'Land' }), country),
-      submit,
-      msg,
-    ),
-  );
-}
-
-function keyForm() {
-  keyAgencySelect = el('select', { id: 'adm-key-agency', required: true });
-  const label = el('input', { id: 'adm-key-label', type: 'text', maxLength: 120, autocomplete: 'off', placeholder: 'z. B. „Missionsplanung 2027“' });
-  const msg = el('p', { class: 'msg', role: 'status', 'aria-live': 'polite' });
-  const submit = el('button', { class: 'btn primary', type: 'submit', text: 'Schlüssel ausgeben' });
-
-  return el('section', { class: 'card' },
-    el('h2', { text: 'Schlüssel ausgeben' }),
-    el('form', { class: 'form', onsubmit: async (e) => {
-      e.preventDefault();
-      const agencyId = keyAgencySelect.value;
-      const agency = data?.agencies?.find((a) => a.id === agencyId);
-      if (!agency) { setMsg(msg, 'Bitte zuerst eine Organisation wählen.'); return; }
-      const l = label.value.trim();
-      setMsg(msg, '');
-      await busy(submit, async () => {
-        try {
-          const key = await adminIssueKey(token, agencyId, l || null);
-          if (!key) { sessionLost(); return; }
-          label.value = '';
-          showSecret(key, agency.name, l);
-          await refresh();
-        } catch (err) {
-          setMsg(msg, errorText(err));
-        }
-      });
-    } },
-      el('div', { class: 'field' }, el('label', { htmlFor: 'adm-key-agency', text: 'Organisation' }), keyAgencySelect),
-      el('div', { class: 'field' }, el('label', { htmlFor: 'adm-key-label', text: 'Bezeichnung (Label)' }), label),
-      submit,
-      msg,
-    ),
-  );
-}
-
-function fillAgencySelect() {
-  if (!keyAgencySelect) return;
-  const prev = keyAgencySelect.value;
-  const agencies = data?.agencies || [];
-  const opts = agencies.length
-    ? [el('option', { value: '', text: '– Organisation wählen –', disabled: true }),
-       ...agencies.map((a) => el('option', { value: a.id, text: a.country ? `${a.name} (${a.country})` : a.name }))]
-    : [el('option', { value: '', text: 'Noch keine Organisation angelegt' })];
-  keyAgencySelect.replaceChildren(...opts);
-  keyAgencySelect.value = agencies.some((a) => a.id === prev) ? prev : '';
-}
-
-// --- Neuer Schlüssel: genau einmal sichtbar ---------------------------------------------------------------
-function showSecret(key, agencyName, label) {
-  const field = el('input', { type: 'text', readOnly: true, value: key, spellcheck: false, 'aria-label': 'Neuer Stationsschlüssel' });
-  const copyMsg = el('p', { class: 'small muted', role: 'status', 'aria-live': 'polite' });
-  const copyBtn = el('button', { class: 'btn primary', type: 'button', text: 'Kopieren', onclick: async () => {
-    let ok = false;
-    try { await navigator.clipboard.writeText(key); ok = true; } catch {
-      field.select();
-      try { ok = document.execCommand('copy'); } catch { ok = false; }
-    }
-    copyMsg.textContent = ok ? 'In die Zwischenablage kopiert.' : 'Kopieren nicht möglich – bitte manuell markieren und kopieren (Strg+C).';
-  } });
-  const closeBtn = el('button', { class: 'btn', type: 'button', text: 'Gesichert – ausblenden', onclick: () => {
-    if (confirm('Schlüssel wirklich ausblenden? Er kann danach NICHT mehr angezeigt werden.')) secretBox.replaceChildren();
-  } });
-
-  secretBox.replaceChildren(
-    el('section', { class: 'secret', role: 'alert' },
-      el('p', {}, el('strong', { text: 'Neuer Stationsschlüssel' }), ` für „${agencyName}“${label ? ` · ${label}` : ''}`),
-      el('div', { class: 'secret-row' }, field, copyBtn, closeBtn),
-      el('p', { class: 'small' },
-        el('strong', { text: 'Nur jetzt sichtbar: ' }),
-        'Der Schlüssel wird nur als Hash gespeichert und kann später nicht mehr angezeigt werden. Jetzt kopieren und sicher an die Organisation übergeben. Bei Verlust einen neuen Schlüssel ausgeben und den alten sperren.'),
-      copyMsg,
-    ),
-  );
-  field.focus();
-  field.select();
-  secretBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-// --- Übersicht -------------------------------------------------------------------------------------------
-function renderOverview() {
-  fillAgencySelect();
-  setMsg(overviewMsg, '');
-  const agencies = data?.agencies || [];
-  const keys = data?.keys || [];
-
-  const byAgency = new Map();
-  for (const k of keys) {
-    if (!byAgency.has(k.agency_id)) byAgency.set(k.agency_id, []);
-    byAgency.get(k.agency_id).push(k);
-  }
-
-  if (!agencies.length) {
-    overviewBox.replaceChildren(el('p', { class: 'empty', text: 'Noch keine Organisationen angelegt.' }));
-    return;
-  }
-
-  overviewBox.replaceChildren(...agencies.map((a) => {
-    const aKeys = byAgency.get(a.id) || [];
-    const activeCount = aKeys.filter((k) => k.active).length;
-    const stations = Number(a.stations) || 0;
-    return el('article', { class: 'agency' },
-      el('div', { class: 'agency-head' },
-        el('h3', { text: a.name }),
-        el('span', { class: 'muted', text: a.country || 'Land: –' }),
-        el('span', { class: 'pill', text: `${stations} ${stations === 1 ? 'Station' : 'Stationen'}` }),
-        el('span', { class: 'pill', text: `${activeCount}/${aKeys.length} Schlüssel aktiv` }),
-      ),
-      aKeys.length ? keyTable(aKeys) : el('p', { class: 'empty', text: 'Noch keine Schlüssel ausgegeben.' }),
-    );
-  }));
-}
-
-function keyTable(keys) {
-  return el('div', { class: 'table-wrap' },
-    el('table', {},
-      el('thead', {}, el('tr', {},
-        ['Bezeichnung', 'Status', 'Erstellt', 'Zuletzt benutzt', ''].map((t) => el('th', { scope: 'col', text: t })))),
-      el('tbody', {}, keys.map(keyRow)),
-    ),
-  );
+    const payload = {};
+    for (const f of AGENCY_FIELDS) payload[f.key] = inputs[f.key].value.trim();
+    const btn = form.querySelector('button[type=submit]');
+    const r = await run(btn, () => (agency ? adminUpdateAgency(token, agency.id, payload) : adminCreateAgency(token, payload)),
+      agency ? 'Organisation aktualisiert.' : 'Organisation angelegt.');
+    if (r !== undefined && r !== null) onDone?.();
+  });
+  return form;
 }
 
 function keyRow(k) {
-  const btn = el('button', {
-    class: `btn sm${k.active ? ' danger' : ''}`, type: 'button', text: k.active ? 'Sperren' : 'Entsperren',
-    onclick: () => toggleKey(k, btn),
-  });
-  return el('tr', { class: k.active ? '' : 'inactive' },
-    el('td', { class: 'label', dataset: { th: 'Bezeichnung' }, text: k.label || '(ohne Bezeichnung)' }),
-    el('td', { dataset: { th: 'Status' } }, el('span', { class: `pill ${k.active ? 'on' : 'off'}`, text: k.active ? 'aktiv' : 'gesperrt' })),
-    el('td', { class: 'date', dataset: { th: 'Erstellt' }, text: fmtDate(k.created_at) }),
-    el('td', { class: 'date', dataset: { th: 'Zuletzt benutzt' }, text: fmtDate(k.last_used_at) }),
-    el('td', {}, btn),
+  return el('div', { class: 'adm-key' },
+    el('span', { class: 'adm-kdot', 'data-on': k.active ? '1' : '' }),
+    el('div', { class: 'adm-kmain' },
+      el('strong', { text: k.label || '(ohne Bezeichnung)' }),
+      el('small', { text: `erstellt ${fmtDate(k.created_at)} · zuletzt benutzt ${fmtDate(k.last_used_at)}` })),
+    el('span', { class: 'adm-badge', 'data-on': k.active ? '1' : '', text: k.active ? 'aktiv' : 'gesperrt' }),
+    el('button', { class: 'ghost small', onclick: (e) => run(e.target, () => adminSetKeyActive(token, k.id, !k.active), k.active ? 'Schlüssel gesperrt.' : 'Schlüssel entsperrt.') },
+      k.active ? 'Sperren' : 'Entsperren'),
   );
 }
 
-async function toggleKey(k, btn) {
-  const next = !k.active;
-  const name = k.label || 'ohne Bezeichnung';
-  if (!next && !confirm(`Schlüssel „${name}“ sperren? Die Organisation kann damit sofort keine Stationen mehr bearbeiten.`)) return;
-  await busy(btn, async () => {
-    try {
-      const ok = await adminSetKeyActive(token, k.id, next);
-      // false = Token ungültig ODER Schlüssel nicht gefunden → über die Übersicht klären
-      if (!ok) {
-        const res = await adminOverview(token);
-        if (!res) { sessionLost(); return; }
-        data = res;
-        renderOverview();
-        setMsg(overviewMsg, 'Schlüssel nicht gefunden – die Übersicht wurde neu geladen.');
-        return;
-      }
-      if (await refresh()) setMsg(overviewMsg, next ? `Schlüssel „${name}“ entsperrt.` : `Schlüssel „${name}“ gesperrt.`, 'ok');
-    } catch (err) {
-      setMsg(overviewMsg, errorText(err));
-    }
-  });
+function agencyCard(a) {
+  const keys = data.keys.filter((k) => k.agency_id === a.id);
+  const card = el('article', { class: 'adm-ag' });
+  const render = (editing) => {
+    card.replaceChildren(el('div', { class: 'adm-ag-head' },
+      el('div', {}, el('h3', { text: a.name }), el('p', { class: 'muted small', text: [a.category, a.country].filter(Boolean).join(' · ') || '—' })),
+      el('div', { class: 'adm-ag-count' }, el('span', { text: `${a.stations} Stationen` }), el('span', { text: `${a.routes} Routen` }))));
+    if (editing) { card.append(agencyForm(a, () => render(false))); return; }
+    const dl = el('dl', { class: 'adm-facts' });
+    const fact = (l, v) => { if (v) dl.append(el('dt', { text: l }), el('dd', { text: v })); };
+    fact('Ansprechpartner', a.contact_person);
+    if (a.email) dl.append(el('dt', { text: 'E-Mail' }), el('dd', {}, el('a', { href: `mailto:${a.email}`, text: a.email })));
+    fact('Telefon', a.phone);
+    if (a.website) dl.append(el('dt', { text: 'Website' }), el('dd', {}, el('a', { href: a.website, target: '_blank', rel: 'noopener', text: a.website })));
+    fact('Beschreibung', a.description);
+    fact('Angelegt', fmtDate(a.created_at));
+    card.append(dl, el('p', { class: 'adm-sub', text: `Stationsschlüssel (${keys.length})` }));
+    const list = el('div', { class: 'adm-keys' });
+    if (!keys.length) list.append(el('p', { class: 'muted small', text: 'Noch kein Schlüssel ausgegeben.' }));
+    keys.forEach((k) => list.append(keyRow(k)));
+    card.append(list, el('div', { class: 'adm-row' },
+      el('button', { class: 'ghost', onclick: () => render(true) }, 'Bearbeiten'),
+      el('button', { class: 'ghost', onclick: () => issueKey(a) }, 'Schlüssel ausgeben'),
+      el('button', { class: 'ghost danger', onclick: () => deleteAgency(a) }, 'Löschen')));
+  };
+  render(false);
+  return card;
 }
 
-// --- Start -----------------------------------------------------------------------------------------------
-async function init() {
-  if (!token) { renderLogin(); return; }
-  app.replaceChildren(header(false), el('main', { class: 'adm-main' }, el('p', { class: 'muted', text: 'Sitzung wird geprüft …' })));
-  try {
-    const res = await adminOverview(token);
-    if (!res) { sessionLost(); return; }
-    data = res;
-    renderDashboard();
-  } catch (err) {
-    // Netzwerk-/Bremsfehler: Token behalten, Meldung zeigen, Anmeldung erneut ermöglichen
-    renderLogin(errorText(err));
-  }
+async function issueKey(a) {
+  const label = prompt(`Bezeichnung für den neuen Schlüssel von „${a.name}" (optional):`, '');
+  if (label === null) return;
+  const key = await run(null, () => adminIssueKey(token, a.id, label.trim() || null));
+  if (key) showKeyOnce(a.name, key);
 }
 
-init();
+function showKeyOnce(agencyName, key) {
+  const ov = el('div', { class: 'adm-modal', onclick: (e) => { if (e.target === ov) ov.remove(); } });
+  ov.append(el('div', { class: 'adm-card adm-keyout' },
+    el('h3', { text: 'Neuer Stationsschlüssel' }),
+    el('p', { class: 'small', text: `Für ${agencyName}. Jetzt kopieren – er wird danach nicht mehr angezeigt.` }),
+    el('code', { class: 'adm-keyval', text: key }),
+    el('div', { class: 'adm-row' },
+      el('button', { onclick: async () => { try { await navigator.clipboard.writeText(key); toast('Kopiert.'); } catch { toast('Bitte manuell markieren.', true); } } }, 'Kopieren'),
+      el('button', { class: 'ghost', onclick: () => ov.remove() }, 'Schließen')),
+  ));
+  document.body.append(ov);
+}
+
+async function deleteAgency(a) {
+  if (!confirm(`Organisation „${a.name}" wirklich löschen? Alle ihre Schlüssel, Stationen und Routen werden mitgelöscht.`)) return;
+  await run(null, () => adminDeleteAgency(token, a.id), 'Organisation gelöscht.');
+}
+
+function stationRow(s) {
+  return el('tr', {},
+    el('td', {}, el('strong', { text: s.name }), s.description ? el('small', { class: 'muted', text: s.description }) : null),
+    el('td', { text: s.body }), el('td', { text: s.agency }), el('td', { text: STATION_KINDS[s.kind] || s.kind }),
+    el('td', {}, el('span', { class: 'adm-badge', 'data-status': s.status, text: s.status })),
+    el('td', { text: fmtDeg(s.lat, s.lon) }), el('td', { text: `Ø ${fmtKm(2 * s.radius_m)}` }), el('td', { text: fmtDate(s.updated_at) }),
+    el('td', {}, el('button', { class: 'ghost danger small', onclick: (e) => { if (confirm(`Station „${s.name}" löschen?`)) run(e.target, () => adminDeleteStation(token, s.id), 'Station gelöscht.'); } }, 'Löschen')),
+  );
+}
+
+function routeRow(r) {
+  return el('tr', {},
+    el('td', { text: r.name }), el('td', { text: ROUTE_KINDS[r.kind] || r.kind }), el('td', { text: r.station }),
+    el('td', { text: r.body }), el('td', { text: r.agency }), el('td', { text: `${r.points} Punkte` }), el('td', { text: fmtDate(r.created_at) }),
+    el('td', {}, el('button', { class: 'ghost danger small', onclick: (e) => { if (confirm(`Route „${r.name}" löschen?`)) run(e.target, () => adminDeleteRoute(token, r.id), 'Route gelöscht.'); } }, 'Löschen')),
+  );
+}
+
+function table(headers, rows, emptyText) {
+  if (!rows.length) return el('p', { class: 'muted small', text: emptyText });
+  const t = el('table', { class: 'adm-table' },
+    el('thead', {}, el('tr', {}, ...headers.map((h) => el('th', { text: h })))),
+    el('tbody', {}, ...rows));
+  return el('div', { class: 'adm-tablewrap' }, t);
+}
+
+function renderApp() {
+  app.replaceChildren(
+    el('div', { class: 'adm-top' },
+      el('span', { class: 'adm-brand' }, 'G.A.L.A.C.T.I.C.', el('span', { text: 'Admin' })),
+      el('div', { class: 'adm-top-actions' },
+        el('button', { class: 'ghost small', onclick: () => refresh() }, 'Aktualisieren'),
+        el('button', { class: 'ghost small', onclick: () => { setToken(null); renderLogin(); } }, 'Abmelden'))),
+    el('main', { class: 'adm-main' },
+      statRow(),
+      el('section', { class: 'adm-sec' },
+        el('h2', { text: 'Neue Organisation' }),
+        el('p', { class: 'muted small', text: 'Mit allen Stammdaten. E-Mail, Telefon und Ansprechpartner sind nicht öffentlich sichtbar – nur hier im Admin-Panel.' }),
+        el('div', { class: 'adm-card' }, agencyForm(null, () => {}))),
+      el('section', { class: 'adm-sec' },
+        el('h2', {}, 'Organisationen ', el('span', { class: 'adm-n', text: String(data.agencies.length) })),
+        data.agencies.length ? el('div', { class: 'adm-ag-grid' }, ...data.agencies.map(agencyCard))
+          : el('p', { class: 'muted small', text: 'Noch keine Organisation angelegt.' })),
+      el('section', { class: 'adm-sec' },
+        el('h2', {}, 'Alle Stationen ', el('span', { class: 'adm-n', text: String(data.stations.length) })),
+        table(['Name', 'Körper', 'Organisation', 'Art', 'Status', 'Position', 'Radius', 'Geändert', ''], data.stations.map(stationRow), 'Noch keine Stationen angelegt.')),
+      el('section', { class: 'adm-sec' },
+        el('h2', {}, 'Alle Routen ', el('span', { class: 'adm-n', text: String(data.routes.length) })),
+        table(['Name', 'Art', 'Station', 'Körper', 'Organisation', 'Umfang', 'Erstellt', ''], data.routes.map(routeRow), 'Noch keine Routen angelegt.')),
+    ),
+  );
+}
+
+// --- Start -----------------------------------------------------------------------------------------
+token = getToken();
+if (token) refresh().catch(() => renderLogin());
+else renderLogin();

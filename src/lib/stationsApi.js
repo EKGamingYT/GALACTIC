@@ -33,10 +33,25 @@ export const deleteRoute = (key, id) => rpc('route_delete', { p_key: key, p_id: 
 
 // --- Admin ---------------------------------------------------------------------------------------------
 export const adminOverview = (token) => rpc('admin_overview', { p_token: token });
-export const adminCreateAgency = (token, name, country) => rpc('admin_create_agency', { p_token: token, p_name: name, p_country: country });
+export const adminCreateAgency = (token, data) => rpc('admin_create_agency', { p_token: token, p: data });
+export const adminUpdateAgency = (token, id, data) => rpc('admin_update_agency', { p_token: token, p_id: id, p: data });
+export const adminDeleteAgency = (token, id) => rpc('admin_delete_agency', { p_token: token, p_id: id });
 export const adminIssueKey = (token, agencyId, label) => rpc('admin_issue_key', { p_token: token, p_agency: agencyId, p_label: label });
 export const adminSetKeyActive = (token, keyId, active) => rpc('admin_set_key_active', { p_token: token, p_key_id: keyId, p_active: active });
 export const adminDeleteStation = (token, id) => rpc('admin_delete_station', { p_token: token, p_id: id });
+export const adminDeleteRoute = (token, id) => rpc('admin_delete_route', { p_token: token, p_id: id });
+
+// Felder einer Organisation (Stammdaten) – für das Admin-Panel
+export const AGENCY_FIELDS = [
+  { key: 'name', label: 'Name', required: true },
+  { key: 'category', label: 'Kategorie', placeholder: 'z. B. Raumfahrtbehörde, Privatunternehmen, Universität' },
+  { key: 'country', label: 'Land' },
+  { key: 'contact_person', label: 'Ansprechpartner' },
+  { key: 'email', label: 'E-Mail', type: 'email' },
+  { key: 'phone', label: 'Telefon' },
+  { key: 'website', label: 'Website', type: 'url' },
+  { key: 'description', label: 'Beschreibung', textarea: true },
+];
 
 export const STATION_KINDS = {
   basis: 'Basis', forschung: 'Forschungsstation', habitat: 'Habitat', landeplatz: 'Landeplatz',

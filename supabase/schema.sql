@@ -225,3 +225,27 @@ grant execute on function public.key_agency(text), public.station_save(text, jso
   to anon, authenticated;
 -- doppelt abgesichert: auch ohne RLS keine Schreibrechte für die API-Rollen
 revoke insert, update, delete, truncate on public.agencies, public.stations, public.routes from anon, authenticated;
+
+-- =====================================================================================================
+-- Erweiterung 2026-10-17: Organisationen mit Stammdaten + volle Admin-Verwaltung
+-- (im Live-Projekt bereits per Migrationen angewandt; hier als Dokumentation des aktuellen Standes)
+-- =====================================================================================================
+alter table public.agencies add column if not exists category text;
+alter table public.agencies add column if not exists website text;
+alter table public.agencies add column if not exists description text;
+-- Kontakt-PII separat und NICHT öffentlich lesbar (Spalten-REVOKE reicht nicht, da anon SELECT auf
+-- Tabellenebene hat → eigene Tabelle im privaten Schema):
+create table if not exists private.agency_contacts (
+  agency_id uuid primary key references public.agencies(id) on delete cascade,
+  contact_person text check (contact_person is null or char_length(contact_person) <= 120),
+  email text check (email is null or char_length(email) <= 200),
+  phone text check (phone is null or char_length(phone) <= 60)
+);
+revoke all on private.agency_contacts from public, anon, authenticated;
+-- admin_create_agency(p_token,p jsonb), admin_update_agency(p_token,p_id,p jsonb): schreiben agencies + agency_contacts
+-- admin_delete_agency(p_token,p_id): löscht Organisation (Stationen/Routen/Schlüssel/Kontakte per CASCADE)
+-- admin_delete_route(p_token,p_id): löscht eine Route
+-- admin_overview(p_token): liefert jetzt zusätzlich alle Stationen, alle Routen und Aktivitätszähler;
+--   Organisationen inkl. Kontaktdaten (nur über diese SECURITY-DEFINER-Funktion sichtbar).
+-- Vollständige Funktionskörper: siehe Supabase-Migrationen agency_contact_fields_and_admin_rpcs
+-- und move_contact_pii_to_private.
