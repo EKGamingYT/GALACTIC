@@ -54,3 +54,9 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 | Vercel (Hobby-Plan) | Öffentliche Demo-URL | Nur Bereitstellung, kein Teil des Codes; Hobby-Plan nur für nicht-kommerzielle Nutzung |
 
 - Lokale Interstellare Wolke / G-Wolke: vereinfachte Kugel-Näherung nach Redfield & Linsky 2008, ApJ 673, 283 (schematisch). Galaktische Koordinaten: IAU-Definition (J2000-Rotationsmatrix).
+
+## Himmel · SPHEREx
+- SPHEREx Quick Release 2 (Bänder D1–D6, 0,75–5 µm): Courtesy NASA/JPL-Caltech; NASA/IPAC IRSA, doi:10.26131/IRSA652. HiPS-Aufbereitung: T. Boch, M. Buga (CDS Strasbourg).
+- Kontext-Ebenen über CDS-HiPS: 2MASS (Skrutskie et al. 2006), AllWISE (Wright et al. 2010), DSS2 (STScI), Planck HFI (ESA).
+- HiPS-Standard: Fernique et al. 2015, A&A 578, A114. Namensauflösung: CDS Sesame/SIMBAD (Wenger et al. 2000).
+- Ingenieurstool: Triebwerks- und Raketendaten der Hersteller/Agenturen (Quelle je Eintrag in src/data/engines.js und launchers.js); Gravitationsparameter JPL DE440, Körperdaten NASA Planetary Fact Sheet.
