@@ -20,6 +20,10 @@ function direction(raDeg, decDeg) {
   return new THREE.Vector3(x, ze, -ye).normalize();
 }
 
+// Größe des Leuchtpunkts (Sprite-Maßstab bei 50° Bildfeld) nach scheinbarer Helligkeit: hell = groß, schwach = winzig
+export const pointScale = (m) => Math.min(0.045, Math.max(0.005, 0.026 * Math.pow(10, -0.06 * (m - 2))));
+export const pointOpacity = (m) => (m > 9 ? Math.max(0.45, 1 - (m - 9) * 0.08) : 1);
+
 export function starBody(s) {
   return {
     ...s,
@@ -57,10 +61,14 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glow, color: body.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: false,
     }));
-    // Punktgröße nach scheinbarer Helligkeit (wie am Himmel): hell = groß, schwach = winzig
-    const size = s.vmag != null ? 0.026 * Math.pow(10, -0.06 * (s.vmag - 2)) : 0.008 + 0.006 * Math.log10(1 + lum * 30);
-    sprite.scale.setScalar(Math.min(0.045, Math.max(0.005, size)));
-    if (s.vmag > 9) sprite.material.opacity = Math.max(0.45, 1 - (s.vmag - 9) * 0.08);
+    // Punktgröße nach scheinbarer Helligkeit (wie am Himmel): hell = groß, schwach = winzig.
+    // Ohne V-Helligkeit: Größe grob aus der Leuchtkraft, als „Ersatz-Helligkeit“ von der Erde aus gesehen.
+    // Beim Fliegen wird daraus je Bild die Helligkeit vom Kamerastandort (Entfernungsmodul, updateVisibility).
+    const size = 0.008 + 0.006 * Math.log10(1 + lum * 30);
+    const vEarth = s.vmag ?? 2 - Math.log10(Math.min(0.045, Math.max(0.005, size)) / 0.026) / 0.06;
+    sprite.scale.setScalar(pointScale(vEarth));
+    sprite.material.opacity = pointOpacity(vEarth);
+    sprite.raycast = () => {};
     node.add(sprite);
     // kleine Kugel für die Nahansicht
     // Nahansicht: kleine, überhelle Kugel (HDR-Farbe > 1 → leuchtet im Bloom wie ein Stern)
@@ -129,7 +137,7 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       color: 0x3ddc84, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false,
     })) : null;
     if (hzRing) { hzRing.rotation.x = -Math.PI / 2; sys.add(hzRing); }
-    items.set(body.id, { s, body, dir, node, sprite, sphere, sphereHit, r, surface, label, sys, planets, hz, hzRing, extent: 0 });
+    items.set(body.id, { s, body, dir, vEarth, node, sprite, sphere, sphereHit, r, surface, label, sys, planets, hz, hzRing, extent: 0 });
   }
 
   // Mehrfachsysteme: aus der Ferne ein gemeinsamer Systemname am Hauptstern statt vieler Einzelnamen
@@ -200,22 +208,30 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
   // Labels nur aus großer Entfernung (Sternansicht) bzw. in der Nähe; Planetensysteme nur nah dran
   // farOut: Kamera weit außerhalb des Sonnensystems – erst dann die Sterne als eigene Punkte zeigen
   // (im System selbst stecken sie schon im echten Himmelshintergrund, doppelt wäre nur Unruhe)
-  const tmp = new THREE.Vector3();
-  function updateVisibility(camera, starView, selectedId, farOut) {
+  // masked: der Hintergrundhimmel (2MASS) blendet die Nachbarsterne aus → ihre Lichtpunkte immer zeigen,
+  //   und zwar dort, wo sie vom (physikalischen) Kamerastandort camLy aus wirklich stehen (echte Parallaxe).
+  // camLy: Kameraposition in Lichtjahren (Szenenachsen, Sonne im Ursprung).
+  const tmp = new THREE.Vector3(), rel = new THREE.Vector3(), starLy = new THREE.Vector3();
+  function updateVisibility(camera, starView, selectedId, farOut, { masked = false, camLy = null } = {}) {
+    // Sprites mit fester Bildschirmgröße: beim Fernrohr-Zoom (kleines FOV) nicht mitwachsen
+    const fovK = Math.tan((camera.fov * Math.PI) / 360) / Math.tan((50 * Math.PI) / 360);
     // Ist ein Sternsystem (Stern/Exoplanet) gewählt und die Kamera dort, gehört die Bühne nur ihm:
     // durch den logarithmischen Maßstab liegen fremde Systeme in derselben Richtung sonst mitten im Bild
     const focusIt = items.get(planetHost.get(selectedId) ?? selectedId);
     const inFocus = focusIt && camera.position.distanceTo(focusIt.node.position) < focusIt.extent * 30;
+    if (camLy) camLyRef = camLy;
     for (const it of items.values()) {
       const dist = camera.position.distanceTo(it.node.position);
+      if (camLy) placePoint(it, camera, dist, fovK, !farOut);
       if (inFocus && it.s.system !== focusIt.s.system) {
-        // ganz ausblenden – der echte Himmelshintergrund zeigt diese Sterne ohnehin
-        it.node.visible = it.sys.visible = it.sphere.visible = it.label.visible = false;
+        // Kugel, Namen und Planeten ausblenden; der Lichtpunkt bleibt, wenn der Hintergrund ihn nicht mehr zeigt
+        it.sys.visible = it.sphere.visible = it.label.visible = false;
+        it.node.visible = masked;
         if (it.systemLabel) it.systemLabel.visible = false;
         continue;
       }
       const near = dist < it.extent * 8;
-      it.node.visible = farOut || near || selectedId === it.body.id;
+      it.node.visible = masked || farOut || near || selectedId === it.body.id;
       it.sys.visible = near || selectedId === it.body.id;
       // Aus der Ferne nur bekannte Sterne beschriften (Beschreibung, Planeten oder ≤ 15 Lj), die übrigen erst beim Heranfliegen
       const major = it.major;
@@ -239,6 +255,22 @@ export function createStars(scene, { sceneDistance, nearDistance, makeLabel, glo
       }
     }
   }
+
+  // Lichtpunkt an die vom Kamerastandort aus gesehene Richtung setzen, Helligkeit nach dortiger Entfernung.
+  // Jenseits von 50.000 AE ist der Szenenmaßstab streng proportional – dort stimmt die Knotenposition schon
+  // exakt; innerhalb des Sonnensystems (logarithmischer Maßstab) korrigiert das die übertriebene Parallaxe.
+  // skyLike: Kamera im Sonnensystem – Punkte zurückhaltend wie die übrigen Sterne des Hintergrundhimmels
+  function placePoint(it, camera, dist, fovK, skyLike) {
+    starLy.copy(it.dir).multiplyScalar(it.s.distanceLy);
+    rel.subVectors(starLy, camLyRef);
+    const dLy = Math.max(rel.length(), 1e-9);
+    tmp.copy(camera.position).addScaledVector(rel.divideScalar(dLy), dist);
+    it.sprite.position.subVectors(tmp, it.node.position);
+    const m = it.vEarth + 5 * Math.log10(dLy / it.s.distanceLy);
+    it.sprite.scale.setScalar(pointScale(m) * fovK * (skyLike ? 0.5 : 1));
+    it.sprite.material.opacity = skyLike ? Math.min(1, Math.max(0.2, 1 - (m - 3) * 0.12)) : pointOpacity(m);
+  }
+  let camLyRef = new THREE.Vector3();
 
   // Koronen der gerade sichtbaren Sterne an die Kamera anpassen
   function tickSurfaces(camera) {

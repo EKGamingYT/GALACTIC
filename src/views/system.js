@@ -17,7 +17,8 @@ import { createBelts, BELTS } from './belts.js';
 import { createSun, createStarBody, spectralKind } from '../lib/sun.js';
 import { createMoonSystems } from './moons.js';
 import { createSkybox } from '../lib/skybox.js';
-import { createStars } from './stars.js';
+import { createStars, pointScale } from './stars.js';
+import { createHipsSky } from '../lib/hipsSky.js';
 import { createIntro } from './intro.js';
 import { createInterstellar } from './interstellar.js';
 import { createAtmosphere } from '../lib/atmosphere.js';
@@ -130,9 +131,13 @@ export function createSystemView(container, { onSelect }) {
 
   // Echter Himmel (NASA SVS Deep Star Maps 2020, äquatorial). Orientierung geprüft: RA 0h in
   // Bildmitte, nach links zunehmend – nur so liegen galaktisches Zentrum, Cygnus und Carina hell.
+  // Diese lokale Karte dient nur noch als Rückfall, bis der dynamische 2MASS-Himmel (HiPS, CDS) geladen ist bzw. falls
+  // CDS nicht erreichbar ist; uBright/uGrid ihres Materials gelten für beide.
   const sky = createSkybox('/textures/starmap_4k.jpg', { raSign: -1, raOffset: 0.5, brightness: 0.8 });
   sky.scale.setScalar(1000);
   scene.add(sky);
+  const hipsSky = createHipsSky({ renderer, fallback: sky });
+  scene.add(hipsSky.group);
   scene.add(new THREE.AmbientLight(0xffffff, 0.1)); // schwach: Nachtseiten dunkel, aber nicht schwarz
   scene.add(new THREE.PointLight(0xfff2d0, 3, 0, 0));
 
@@ -245,7 +250,7 @@ export function createSystemView(container, { onSelect }) {
       return l;
     },
   });
-  if (import.meta.env.DEV) Object.assign(window, { __stars: stars, __camera: camera }); // nur lokales Testen
+  if (import.meta.env.DEV) Object.assign(window, { __stars: stars, __camera: camera, __hipsSky: hipsSky, __controls: controls }); // nur lokales Testen
   // Galaktische Ebene mit Entfernungsringen, Richtung galaktisches Zentrum, lokale interstellare Wolken
   const interstellar = createInterstellar(scene, { sceneDistance, makeLabel: (text, cls, y) => makeLabel(text, cls, y) });
 
@@ -578,7 +583,7 @@ export function createSystemView(container, { onSelect }) {
   hint.className = 'nav-hint';
   hint.innerHTML = matchMedia('(pointer: coarse)').matches
     ? '<span><b>Wischen</b> drehen</span><span><b>Zwei Finger</b> zoomen</span><span><b>Tippen</b> hinfliegen</span>'
-    : '<span><b>Ziehen</b> drehen</span><span><b>Mausrad</b> zoomen</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fliegen</span><span><b>Klick</b> hinfliegen</span>';
+    : '<span><b>Ziehen</b> drehen</span><span><b>Mausrad</b> zoomen</span><span><b>Shift + Rad</b> Fernrohr</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fliegen</span><span><b>Klick</b> hinfliegen</span>';
   hint.classList.add('gone');
   container.appendChild(hint);
   let hintUsed = false;
@@ -603,12 +608,42 @@ export function createSystemView(container, { onSelect }) {
     focus(body.id);
   });
 
+  // --- Fernrohr-Zoom: Shift + Mausrad verkleinert das Bildfeld (FOV) statt die Kamera zu bewegen ---------
+  // Der 2MASS-Himmel lädt dabei automatisch feinere HiPS-Kacheln nach (bis ~1″ je Pixel).
+  const BASE_FOV = camera.fov, MIN_FOV = 0.2;
+  let fovTarget = BASE_FOV;
+  const fovChip = document.createElement('div');
+  fovChip.className = 'pivot-chip fov-chip';
+  fovChip.hidden = true;
+  fovChip.innerHTML = '<span class="pv-text"></span><button type="button" title="Normales Bildfeld">Zurück</button>';
+  container.appendChild(fovChip);
+  fovChip.querySelector('button').onclick = () => { fovTarget = BASE_FOV; };
+  container.addEventListener('wheel', (e) => {
+    if (!e.shiftKey || !active) return;
+    e.preventDefault();
+    e.stopPropagation(); // nicht an OrbitControls weiterreichen (kein Kamera-Zoom)
+    const d = e.deltaY || e.deltaX; // manche Browser machen aus Shift+Rad ein waagrechtes Scrollen
+    const dy = e.deltaMode === 1 ? d * 16 : e.deltaMode === 2 ? d * 400 : d;
+    fovTarget = Math.max(MIN_FOV, Math.min(BASE_FOV, fovTarget * Math.exp(Math.max(-1, Math.min(1, dy * 0.0016)))));
+  }, { capture: true, passive: false });
+  function stepFov() {
+    if (Math.abs(camera.fov - fovTarget) < 1e-4) return;
+    const f = Math.exp(Math.log(camera.fov) + (Math.log(fovTarget) - Math.log(camera.fov)) * 0.2);
+    camera.fov = Math.abs(f - fovTarget) / fovTarget < 0.002 ? fovTarget : f;
+    camera.updateProjectionMatrix();
+    controls.rotateSpeed = 0.7 * (camera.fov / BASE_FOV); // feinfühlig drehen, wenn stark vergrößert
+    fovChip.hidden = camera.fov > BASE_FOV * 0.98;
+    const fov = camera.fov;
+    fovChip.querySelector('.pv-text').textContent = `Fernrohr · Bildfeld ${fov >= 1 ? fov.toFixed(fov >= 10 ? 0 : 1) : (fov * 60).toFixed(0) + '′'}${fov >= 1 ? '°' : ''}`.replace('.', ',');
+  }
+
   // --- Kamera-Flüge -------------------------------------------------------------------
   // Flug wie bei einem Globus-Programm: Blickziel gleitet zum neuen Ziel, der Kameraabstand wird
   // logarithmisch überblendet und bei weiten Strecken in einem Bogen angehoben (erst raus, dann rein).
   // Zeitbasiert (unabhängig von der Bildrate), Dauer wächst mit der Größenordnung des Sprungs.
   let flight = null;
   let follow = null; // Körper, dem die Kamera nach dem Anflug folgt
+  const camLy = new THREE.Vector3();
   const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
   function flyTo(toPos, toTarget, followId = null, durationMs = null) {
     const fromTarget = controls.target.clone();
@@ -625,6 +660,7 @@ export function createSystemView(container, { onSelect }) {
     };
     follow = followId;
     setPivotMode(followId);
+    fovTarget = BASE_FOV; // Flüge immer mit normalem Bildfeld
   }
   function stepFlight(now) {
     const f = flight;
@@ -812,8 +848,12 @@ export function createSystemView(container, { onSelect }) {
       }
     }
     lastFollowPos = follow ? worldPos(follow) : null;
+    stepFov();
     stars.tickSurfaces(camera);
-    stars.updateVisibility(camera, starView, selectedId, camera.position.length() > sceneDistance(5000, blend));
+    // physikalischer Kamerastandort (Lj): Richtung wie in der Szene, Abstand über die Umkehrung des Maßstabs
+    const camLen = camera.position.length();
+    camLy.copy(camera.position).multiplyScalar(camLen > 0 ? inverseDistance(camLen, blend) / AU_PER_LY / camLen : 0);
+    stars.updateVisibility(camera, starView, selectedId, camLen > sceneDistance(5000, blend), { masked: hipsSky.ready, camLy });
     if (starView) moons.setVisible(false);
     else moons.updateVisibility(camera, selectedId);
     // Beschriftungen kleiner Objekte nur aus der Nähe (gegen Überlappung)
@@ -821,8 +861,12 @@ export function createSystemView(container, { onSelect }) {
       if (minorLabel) minorLabel.visible = body.id === selectedId || camera.position.distanceTo(mesh.position) < 45;
     }
     updateStarView();
+    // Sonne als Stern (Sternansicht): Helligkeit wie von hier aus gesehen (M_V = 4,83), feste Bildschirmgröße
+    if (starView) starGlow.scale.setScalar(pointScale(4.83 + 5 * Math.log10(Math.max(camLy.length(), 1e-6) / 32.6156))
+      * Math.tan((camera.fov * Math.PI) / 360) / Math.tan((50 * Math.PI) / 360));
     controls.update();
     sky.position.copy(camera.position); // unendlich fern: wandert mit der Kamera
+    hipsSky.update(camera, renderer.domElement.clientHeight);
     pivotMarker.position.copy(controls.target);
     // Himmel dynamisch: nahe der hellen Sonne gedämpft, im tiefen All voller (logarithmisch nach Abstand)
     const camDist = camera.position.length();
