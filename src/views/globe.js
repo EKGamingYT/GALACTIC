@@ -252,7 +252,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     nav.startView(0);
 
     // --- Namen & Bedienelemente ---
-    names = createNames(v, { ellipsoid, radius: r, bodyId: body.id });
+    names = createNames(v, { ellipsoid, radius: r, bodyId: body.id, reserved: () => sitesLayer?.reservedRects() ?? [] });
     const namesAvailable = hasNames(body.id);
     let namesReady = false;
     const closeFeature = () => { names.select(null); ui.showFeature(null); };

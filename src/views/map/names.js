@@ -17,7 +17,7 @@ const fontSize = (px) => (px > 320 ? 19 : px > 130 ? 16 : px > 65 ? 14 : 12);
 const OUTLINE = new Color(0.02, 0.03, 0.07, 0.95);
 const ACCENT = Color.fromCssColorString('#6ea8ff');
 
-export function createNames(viewer, { ellipsoid, radius, bodyId }) {
+export function createNames(viewer, { ellipsoid, radius, bodyId, reserved }) {
   const { scene } = viewer;
   const camera = scene.camera;
   const canvas = scene.canvas;
@@ -58,14 +58,15 @@ export function createNames(viewer, { ellipsoid, radius, bodyId }) {
     }
     cands.sort((a, b) => b.px - a.px);
 
-    const maxLabels = Math.min(110, Math.max(20, Math.round((w * h) / 15000)));
-    const rects = [];
+    // weniger, dafür lesbare Namen; Flächen der Raumfahrt-Orte sind vorab belegt (keine Überlagerung)
+    const maxLabels = Math.min(70, Math.max(14, Math.round((w * h) / 24000)));
+    const rects = [...(reserved?.() ?? [])];
     const next = [];
     for (const c of cands) {
       if (next.length >= maxLabels) break;
       const fs = fontSize(c.px);
-      const hw = (c.f.name.length * fs * 0.58 + 8) / 2;
-      const hh = fs / 2 + 3;
+      const hw = (c.f.name.length * fs * 0.58 + 14) / 2; // etwas Luft zwischen den Namen
+      const hh = fs / 2 + 5;
       const r = [c.x - hw, c.y - hh, c.x + hw, c.y + hh];
       if (rects.some((o) => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1])) continue;
       rects.push(r);
