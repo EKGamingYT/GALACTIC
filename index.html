@@ -74,6 +74,17 @@
       .boot.done .boot-inner { transform: scale(1.05); filter: blur(3px); }
       .boot.fast .boot-inner { transition-duration: 0.22s; }
       .bt-head { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      /* Fortschrittsring um das Logo (--p kommt aus src/ui/boot.js) + Glanzpunkt, der mitläuft */
+      .bt-mark-wrap { position: relative; display: grid; place-items: center; width: 76px; height: 76px; }
+      .bt-mark-wrap::before { content: ''; position: absolute; inset: 0; border-radius: 50%;
+        background: conic-gradient(from -90deg, #6ea8ff, #b98cff calc(var(--p, 0) * 1turn), rgba(130, 170, 255, 0.1) 0);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+        filter: drop-shadow(0 0 6px rgba(110, 168, 255, 0.6)); transition: --p 0.3s; }
+      .bt-mark-wrap::after { content: ''; position: absolute; inset: -10px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(110, 168, 255, 0.18), transparent 65%); animation: bt-glow 2.4s ease-in-out infinite alternate; }
+      @keyframes bt-glow { from { opacity: 0.4; transform: scale(0.94); } to { opacity: 1; transform: scale(1.04); } }
+      .boot.go .bt-mark-wrap::before { background: conic-gradient(#b98cff, #6ea8ff, #b98cff); }
       .boot-mark { width: 60px; height: 60px; filter: drop-shadow(0 0 20px rgba(110, 168, 255, 0.5)); transition: filter 0.4s ease; }
       .boot.go .boot-mark { filter: drop-shadow(0 0 28px rgba(185, 140, 255, 0.85)); }
       .boot-ring { transform-origin: 32px 32px; animation: boot-spin 2.6s linear infinite; }
@@ -246,7 +257,7 @@
       <div class="boot-scan" aria-hidden="true"></div>
       <div class="boot-inner">
         <div class="bt-head">
-          <svg class="boot-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <div class="bt-mark-wrap"><svg class="boot-mark" viewBox="0 0 64 64" aria-hidden="true">
             <defs>
               <radialGradient id="boot-g" cx="35%" cy="32%" r="75%">
                 <stop offset="0" stop-color="#fff" />
@@ -264,7 +275,7 @@
             <ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="1.8" opacity="0.5" />
             <circle cx="32" cy="32" r="12.5" fill="url(#boot-g)" />
             <g clip-path="url(#boot-front)"><ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="url(#boot-r)" stroke-width="2" /></g>
-          </svg>
+          </svg></div>
           <div class="boot-name">G.A.L.A.C.T.I.C.</div>
           <div class="boot-full" aria-hidden="true">Global Aerospace Logistics and Astronautical Cooperation – Technology, Innovation, Colonization</div>
           <div class="boot-sub" id="boot-sub" aria-hidden="true">Verbindung wird aufgebaut</div>

@@ -99,6 +99,7 @@ function start(root) {
   const setBar = (v) => {
     shown = Math.max(shown, Math.min(1, v));
     bar.style.setProperty('--p', shown.toFixed(3));
+    root.style.setProperty('--p', shown.toFixed(3)); // Fortschrittsring um das Logo
     if (pc) pc.textContent = `${Math.round(shown * 100)} %`;
     telemetry(shown);
   };
