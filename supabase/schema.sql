@@ -249,3 +249,16 @@ revoke all on private.agency_contacts from public, anon, authenticated;
 --   Organisationen inkl. Kontaktdaten (nur über diese SECURITY-DEFINER-Funktion sichtbar).
 -- Vollständige Funktionskörper: siehe Supabase-Migrationen agency_contact_fields_and_admin_rpcs
 -- und move_contact_pii_to_private.
+
+-- =====================================================================================================
+-- Erweiterung 2026-10-17 (2): weitere Stammdaten, Seiteneinstellungen, Besucherzählung
+-- (live per Migration agencies_more_fields_settings_visits angewandt)
+-- =====================================================================================================
+-- public.agencies: + short_name, founded, headquarters, employees, budget_usd_m, status, source_url, is_reference
+-- private.agency_contacts: + address, notes (nur Admin)
+-- public.site_settings(key, value jsonb): 'maintenance' {enabled, message}, 'announcement' {enabled, text};
+--   öffentlich lesbar (App prüft beim Start), schreiben nur über admin_set_setting(token, key, value)
+-- private.visits(ts, path, sid bytea): keine IP, nur gehashte Zufalls-Sitzungs-ID; log_visit(path, sid)
+--   (max. 30/Sitzung/Stunde, Löschung nach 180 Tagen); Auswertung nur in admin_overview → 'visits'
+-- private.agency_apply(id, p jsonb): gemeinsamer Schreibpfad für admin_create_agency / admin_update_agency
+-- Referenzdaten: 36 reale Raumfahrtorganisationen (is_reference = true), nur öffentliche Stammdaten.
