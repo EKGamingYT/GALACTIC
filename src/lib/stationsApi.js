@@ -41,16 +41,46 @@ export const adminSetKeyActive = (token, keyId, active) => rpc('admin_set_key_ac
 export const adminDeleteStation = (token, id) => rpc('admin_delete_station', { p_token: token, p_id: id });
 export const adminDeleteRoute = (token, id) => rpc('admin_delete_route', { p_token: token, p_id: id });
 
-// Felder einer Organisation (Stammdaten) – für das Admin-Panel
+// --- Seiteneinstellungen & Besucher ---------------------------------------------------------------------
+export const adminSetSetting = (token, key, value) => rpc('admin_set_setting', { p_token: token, p_key: key, p_value: value });
+export const getSettings = async () => Object.fromEntries((await request('site_settings?select=key,value')).map((r) => [r.key, r.value]));
+export const logVisit = (path, sid) => rpc('log_visit', { p_path: path, p_sid: sid });
+
+// --- Stammdaten-Felder einer Organisation (Admin-Panel) -------------------------------------------------
+export const AGENCY_CATEGORIES = [
+  'Raumfahrtbehörde', 'Internationale Organisation', 'Raumfahrtunternehmen', 'Trägerraketen-Betreiber',
+  'Satelliten-/Raumfahrzeughersteller', 'Forschungseinrichtung', 'Universität', 'Startup', 'Militär/Verteidigung', 'Sonstige',
+];
+export const AGENCY_STATUS = ['aktiv', 'geplant', 'aufgelöst'];
+// ISO-3166-Ländercodes → deutsche Namen über Intl.DisplayNames (keine eigene Namensliste nötig)
+const ISO = 'AF AX AL DZ AS AD AO AI AG AR AM AW AU AT AZ BS BH BD BB BY BE BZ BJ BM BT BO BA BW BR BN BG BF BI CV KH CM CA KY CF TD CL CN CO KM CG CD CR CI HR CU CW CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FJ FI FR GF PF GA GM GE DE GH GR GL GD GP GU GT GG GN GW GY HT HN HK HU IS IN ID IR IQ IE IM IL IT JM JP JE JO KZ KE KI KP KR XK KW KG LA LV LB LS LR LY LI LT LU MO MG MW MY MV ML MT MH MQ MR MU MX FM MD MC MN ME MA MZ MM NA NR NP NL NC NZ NI NE NG MK NO OM PK PW PS PA PG PY PE PH PL PT PR QA RE RO RU RW WS SM ST SA SN RS SC SL SG SK SI SB SO ZA SS ES LK SD SR SE CH SY TW TJ TZ TH TL TG TO TT TN TR TM UG UA AE GB US UY UZ VU VA VE VN YE ZM ZW'.split(' ');
+let countries = null;
+export function countryNames() {
+  if (countries) return countries;
+  let dn = null;
+  try { dn = new Intl.DisplayNames(['de'], { type: 'region' }); } catch { /* sehr alte Browser */ }
+  countries = ['International', 'Europäische Union', ...ISO.map((c) => dn?.of(c) ?? c).sort((a, b) => a.localeCompare(b, 'de'))];
+  return countries;
+}
+// type: text | number | url | email | select | textarea · private: nur im Admin-Panel sichtbar (nicht öffentlich lesbar)
 export const AGENCY_FIELDS = [
-  { key: 'name', label: 'Name', required: true },
-  { key: 'category', label: 'Kategorie', placeholder: 'z. B. Raumfahrtbehörde, Privatunternehmen, Universität' },
-  { key: 'country', label: 'Land' },
-  { key: 'contact_person', label: 'Ansprechpartner' },
-  { key: 'email', label: 'E-Mail', type: 'email' },
-  { key: 'phone', label: 'Telefon' },
-  { key: 'website', label: 'Website', type: 'url' },
-  { key: 'description', label: 'Beschreibung', textarea: true },
+  { key: 'name', label: 'Name', required: true, group: 'Stammdaten' },
+  { key: 'short_name', label: 'Kürzel', group: 'Stammdaten', placeholder: 'z. B. NASA' },
+  { key: 'category', label: 'Kategorie', type: 'select', options: () => AGENCY_CATEGORIES, group: 'Stammdaten' },
+  { key: 'status', label: 'Status', type: 'select', options: () => AGENCY_STATUS, group: 'Stammdaten' },
+  { key: 'country', label: 'Land', type: 'select', options: countryNames, group: 'Stammdaten' },
+  { key: 'headquarters', label: 'Hauptsitz', group: 'Stammdaten', placeholder: 'Stadt' },
+  { key: 'founded', label: 'Gründungsjahr', type: 'number', min: 1800, max: 2200, group: 'Kennzahlen' },
+  { key: 'employees', label: 'Mitarbeitende', type: 'number', min: 0, group: 'Kennzahlen' },
+  { key: 'budget_usd_m', label: 'Jahresbudget (Mio. USD)', type: 'number', min: 0, step: 'any', group: 'Kennzahlen' },
+  { key: 'website', label: 'Website', type: 'url', group: 'Kennzahlen' },
+  { key: 'source_url', label: 'Quelle der Angaben', type: 'url', group: 'Kennzahlen' },
+  { key: 'description', label: 'Beschreibung', type: 'textarea', group: 'Kennzahlen' },
+  { key: 'contact_person', label: 'Ansprechpartner', group: 'Kontakt (privat)', private: true },
+  { key: 'email', label: 'E-Mail', type: 'email', group: 'Kontakt (privat)', private: true },
+  { key: 'phone', label: 'Telefon', type: 'tel', group: 'Kontakt (privat)', private: true },
+  { key: 'address', label: 'Postanschrift', type: 'textarea', group: 'Kontakt (privat)', private: true },
+  { key: 'notes', label: 'Interne Notizen', type: 'textarea', group: 'Kontakt (privat)', private: true },
 ];
 
 export const STATION_KINDS = {
