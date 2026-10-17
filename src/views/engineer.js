@@ -152,6 +152,9 @@ function kpi(label, value, sub, tone) {
   return el('div', { class: `eng-kpi${tone ? ` ${tone}` : ''}` },
     el('span', { class: 'k', text: label }), el('span', { class: 'v', text: value }), sub ? el('span', { class: 's', text: sub }) : null);
 }
+function colHead(title, sub) {
+  return el('div', { class: 'eng-colhead' }, el('span', { class: 't', text: title }), sub ? el('span', { class: 's', text: sub }) : null);
+}
 function card(title, ...kids) {
   return el('section', { class: 'eng-card' }, title ? el('h3', { text: title }) : null, kids);
 }
@@ -315,11 +318,12 @@ export function createEngineerView(container) {
   container.append(root);
 
   const TABS = [
-    { id: 'rakete', name: 'Rakete' },
-    { id: 'orbit', name: 'Orbit / Satellit' },
-    { id: 'mission', name: 'Mission / Sonde' },
-    { id: 'raumschiff', name: 'Raumschiff' },
-    { id: 'katalog', name: 'Triebwerke' },
+    { id: 'rakete', name: 'Rakete', icon: 'M12 2.5c2.6 2.4 4 6 4 10.2l-1.6 3.3H9.6L8 12.7C8 8.5 9.4 4.9 12 2.5zM12 8.2v.01M9.6 16 7.5 20.5l3-1.2M14.4 16l2.1 4.5-3-1.2' },
+    { id: 'orbit', name: 'Orbit / Satellit', icon: 'M12 9.6a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8zM2.8 12c0-2.8 4.1-5 9.2-5s9.2 2.2 9.2 5-4.1 5-9.2 5-9.2-2.2-9.2-5zM19.5 7.5v.01' },
+    { id: 'mission', name: 'Mission / Sonde', icon: 'M5 19a2 2 0 1 1 0-.01M19 5a2 2 0 1 1 0-.01M6.5 17.5C9 11 13 8 17.5 6.5' },
+    { id: 'raumschiff', name: 'Raumschiff', icon: 'M9 4h6v5H9zM3 7.5h4.5M16.5 7.5H21M3 5v5M21 5v5M10 9l-1.5 11h7L14 9M12 13v4' },
+    { id: 'katalog', name: 'Triebwerke', icon: 'M8.5 3h7v3.5l2.8 10H5.7l2.8-10zM8.5 6.5h7M10 19.5l2 2 2-2' },
+    { id: 'verzeichnis', name: 'Verzeichnis', icon: 'M8.5 6h12M8.5 12h12M8.5 18h12M4 5.2v1.6M4 11.2v1.6M4 17.2v1.6' },
   ];
   const tabBar = el('div', { class: 'seg eng-tabs', role: 'tablist', 'aria-label': 'Bereiche des Ingenieurstools' });
   const panels = {};
@@ -329,7 +333,9 @@ export function createEngineerView(container) {
 
   for (const t of TABS) {
     const pid = nextId('p');
-    const b = el('button', { type: 'button', role: 'tab', 'aria-controls': pid, text: t.name, onclick: () => show(t.id) });
+    const ico = sv('svg', { viewBox: '0 0 24 24', class: 'eng-tab-ico', 'aria-hidden': 'true' });
+    ico.append(sv('path', { d: t.icon }));
+    const b = el('button', { type: 'button', role: 'tab', 'aria-controls': pid, onclick: () => show(t.id) }, ico, el('span', { text: t.name }));
     tabBtns[t.id] = b;
     tabBar.append(b);
     panels[t.id] = el('div', { class: 'eng-panel', id: pid, role: 'tabpanel' });
@@ -338,7 +344,7 @@ export function createEngineerView(container) {
     el('header', { class: 'eng-head' },
       el('div', {},
         el('h2', { class: 'eng-title', text: 'Ingenieurstool' }),
-        el('p', { class: 'eng-sub', text: 'Raketen, Satelliten, Sonden und Raumschiffe überschlägig auslegen – alle Werte live, alle Formeln offen.' })),
+        el('p', { class: 'eng-sub', text: 'Raketen, Satelliten, Sonden und Raumschiffe überschlägig auslegen – alle Werte live, alle Formeln offen. Dazu ein Verzeichnis aller Objekte im All.' })),
       tabBar),
     ...Object.values(panels),
     el('p', { class: 'eng-foot', text: 'Vereinfachte Lehrmodelle (Tsiolkovsky, Kreisbahnen, Hohmann, Patched Conics). Ergebnisse sind Richtwerte, keine Missionsplanung.' }),
@@ -353,7 +359,18 @@ export function createEngineerView(container) {
       panels[t.id].hidden = !on;
     }
     try { localStorage.setItem('galactic.engineer.tab', id); } catch { /* egal */ }
+    // aktiven Tab in der (auf dem Handy scrollbaren) Leiste sichtbar halten
+    const tb = tabBtns[id];
+    if (tabBar.scrollWidth > tabBar.clientWidth) tabBar.scrollLeft = Math.max(0, tb.offsetLeft - tabBar.offsetLeft - 24);
+    if (id === 'verzeichnis' && !dirState.loaded) {
+      dirState.loaded = true;
+      const p = panels.verzeichnis;
+      p.append(el('p', { class: 'eng-hint', text: 'Verzeichnis wird geladen …' }));
+      import('./spacecraft.js').then((m) => { clear(p); m.buildDirectory(p); })
+        .catch(() => { dirState.loaded = false; clear(p); p.append(el('p', { class: 'eng-error', text: 'Verzeichnis konnte nicht geladen werden – bitte Seite neu laden.' })); });
+    }
   }
+  const dirState = { loaded: false };
 
   buildRocket(panels.rakete);
   buildOrbit(panels.orbit);
@@ -377,8 +394,8 @@ function buildRocket(panel) {
   const state = {
     payload: 5000,
     stages: [
-      { name: '1. Stufe', triebwerke: [{ id: 'rd-180', anzahl: 1 }], mp: 284089, md: 21054, parallel: false },
-      { name: '2. Stufe', triebwerke: [{ id: 'rl10c-1', anzahl: 1 }], mp: 20830, md: 2316, parallel: false },
+      { name: '1. Stufe', triebwerke: [{ id: 'rd-180', anzahl: 1 }], mp: 284089, md: 21054, parallel: false, L: 32.46, D: 3.81 },
+      { name: '2. Stufe', triebwerke: [{ id: 'rl10c-1', anzahl: 1 }], mp: 20830, md: 2316, parallel: false, L: 12.68, D: 3.05 },
     ],
     source: null,
   };
@@ -390,6 +407,7 @@ function buildRocket(panel) {
     if (!l) return;
     state.stages = l.stufen.map((s) => ({
       name: s.name, triebwerke: s.triebwerke.map((g) => ({ ...g })), mp: s.treibstoff_kg, md: s.trocken_kg, parallel: !!s.parallel, hinweis: s.hinweis,
+      L: s.laenge_m ?? null, D: s.durchmesser_m ?? null,
     }));
     if (l.nutzlast_kg != null) state.payload = l.nutzlast_kg;
     state.source = l;
@@ -406,12 +424,15 @@ function buildRocket(panel) {
     renderEditor(); update();
   } });
 
+  const heroBox = el('div', { class: 'eng-hero' });
+  const budgetBox = el('div');
   const resBox = el('div', { class: 'eng-results' });
   const chartBox = el('div', { class: 'eng-charts' });
   const rocketBox = el('div', { class: 'eng-rocket' });
 
-  panel.append(el('div', { class: 'eng-grid' },
+  panel.append(el('div', { class: 'eng-grid io' },
     el('div', { class: 'eng-col' },
+      colHead('Eingaben', 'Vorlage wählen oder Stufen frei zusammenstellen'),
       card('Aufbau', el('div', { class: 'eng-row' }, tplSel, addBtn), srcBox, payloadField, stagesBox),
       formula('Formeln & Annahmen', [
         ['Δv = Isp · g₀ · ln(m₀ / m_f)', 'Raketengrundgleichung (Tsiolkovsky), g₀ = 9,80665 m/s²'],
@@ -420,11 +441,15 @@ function buildRocket(panel) {
         ['Isp_1. Stufe = (Isp_SL + Isp_vak) / 2', 'Stufen, die am Boden zünden, rechnen mit der gemittelten Isp; alle anderen mit Vakuum-Isp'],
         ['Parallel: Isp_eff = ΣF / (Σṁ · g₀)', 'Booster brennen gemeinsam mit der Folgestufe; deren verbrauchter Treibstoff wird abgezogen, danach Abwurf der Booster-Trockenmasse'],
         'Nicht berücksichtigt: Gravitations-, Luftwiderstands- und Steuerverluste (stecken pauschal im LEO-Richtwert), Drosselung, Verkleidungsabwurf, Restreibstoff. Feststoffmotoren werden mit Maximalschub gerechnet – ihre Brenndauer erscheint daher zu kurz.',
+        ['L ≈ m_T / (ρ · A · 0,78) + 0,3 · D', 'Seitenansicht: fehlende Stufenlängen werden aus Treibstoffmasse, mittlerer Treibstoffdichte ρ (RP-1/LOX ≈ 1 030, CH₄/LOX ≈ 830, LH₂/LOX ≈ 360, fest ≈ 1 750 kg/m³, Füllgrad fest 0,88) und Querschnitt A geschätzt; fehlende Durchmesser aus D ≈ 0,55 · ∛(Startmasse in t)'],
       ])),
     el('div', { class: 'eng-col' },
-      card('Ergebnis', resBox),
-      card('Masse & Δv je Stufe', chartBox),
-      card('Seitenansicht (schematisch)', rocketBox))));
+      colHead('Ergebnisse', 'aktualisieren sich bei jeder Eingabe'),
+      heroBox,
+      card('Δv-Bilanz gegen Zielbahnen', budgetBox),
+      card('Kennwerte je Brennphase', resBox),
+      card('Seitenansicht (maßstäblich)', rocketBox),
+      card('Masse & Δv je Stufe', chartBox))));
 
   function renderEditor() {
     clear(payloadField);
@@ -466,6 +491,11 @@ function buildRocket(panel) {
         el('div', { class: 'eng-row' },
           numField('Treibstoffmasse', s.mp == null ? null : s.mp / 1000, 't', (v) => { s.mp = v == null ? null : v * 1000; update(); }, { min: 0 }),
           numField('Trockenmasse', s.md == null ? null : s.md / 1000, 't', (v) => { s.md = v == null ? null : v * 1000; update(); }, { min: 0 })),
+        el('details', { class: 'eng-dims', open: s.L != null || s.D != null ? true : null },
+          el('summary', { text: `Abmessungen${s.L != null || s.D != null ? '' : ' (optional, sonst geschätzt)'}` }),
+          el('div', { class: 'eng-row' },
+            numField(s.parallel && !last ? 'Länge je Booster' : 'Länge', s.L, 'm', (v) => { s.L = v; drawRocket(); }, { min: 0, d: 2 }),
+            numField(s.parallel && !last ? 'Ø je Booster' : 'Durchmesser', s.D, 'm', (v) => { s.D = v; drawRocket(); }, { min: 0, d: 2 }))),
         el('label', { class: 'eng-check', for: parId }, par, el('span', { text: last ? 'Parallel-Booster (nur mit Folgestufe möglich)' : 'Booster: brennt parallel zur nächsten Stufe' })),
         s.hinweis ? el('p', { class: 'eng-hint', text: s.hinweis }) : null));
     });
@@ -473,13 +503,17 @@ function buildRocket(panel) {
 
   function update() {
     const res = computeRocket(state.stages, state.payload);
-    clear(resBox);
+    clear(resBox); clear(heroBox); clear(budgetBox);
+    const targets = rocketTargets();
     if (res.rows.length) {
-      resBox.append(el('div', { class: 'eng-kpis' },
-        kpi('Gesamt-Δv', `${fmt(res.dvTotal / 1000, 2)} km/s`, res.error ? 'unvollständig' : 'ohne Verluste', 'hi'),
-        kpi('Startmasse', `${fmt(res.m0Total / 1000, 1)} t`),
-        kpi('Start-TWR', fmt(res.rows[0].twr0, 2), res.rows[0].twr0 < 1 ? 'hebt nicht ab' : null, res.rows[0].twr0 < 1 ? 'bad' : null),
-        kpi('Nutzlastanteil', `${fmt(res.payloadFrac * 100, 2)} %`)));
+      const reach = [...targets].reverse().find((t) => res.dvTotal / 1000 >= t.dv);
+      const twr = res.rows[0].twr0;
+      heroBox.append(el('div', { class: 'eng-kpis hero' },
+        kpi('Gesamt-Δv', `${fmt(res.dvTotal / 1000, 2)} km/s`, res.error ? 'unvollständig' : reach ? `reicht für ${reach.name}` : 'reicht nicht für LEO', reach ? 'hi' : 'hi warn'),
+        kpi('Startmasse', `${fmt(res.m0Total / 1000, 1)} t`, `davon Nutzlast ${fmt((state.payload || 0) / 1000, 1)} t`),
+        kpi('Start-TWR', fmt(twr, 2), twr < 1 ? 'hebt nicht ab' : twr < 1.15 ? 'knapp – hohe Verluste' : 'hebt ab', twr < 1 ? 'bad' : null),
+        kpi('Nutzlastanteil', `${fmt(res.payloadFrac * 100, 2)} %`, 'der Startmasse')));
+      budgetBox.append(dvBudget(res, targets, Math.round(Math.min(900, Math.max(320, budgetBox.clientWidth || 640)))));
       const table = el('table', { class: 'eng-table' },
         el('thead', {}, el('tr', {}, ['Phase', 'Isp', 'Δv', 'TWR Start', 'TWR Ende', 'Brenndauer', 'm₀/m_f'].map((h) => el('th', { scope: 'col', text: h })))),
         el('tbody', {}, res.rows.map((r) => el('tr', {},
@@ -493,7 +527,7 @@ function buildRocket(panel) {
       resBox.append(el('div', { class: 'eng-scroll' }, table));
       // Zielwerte
       const tgt = el('div', { class: 'eng-targets' });
-      for (const t of rocketTargets()) {
+      for (const t of targets) {
         const ok = res.dvTotal / 1000 >= t.dv;
         const p = Math.min(1, res.dvTotal / 1000 / t.dv);
         tgt.append(el('div', { class: `eng-target${ok ? ' ok' : ''}` },
@@ -501,12 +535,16 @@ function buildRocket(panel) {
           el('div', { class: 'eng-bar' }, el('i', { style: `width:${(p * 100).toFixed(1)}%` })),
           el('span', { class: 'eng-target-n', text: t.note })));
       }
-      resBox.append(el('h4', { text: 'Ziel-Δv (Richtwerte)' }), tgt,
+      budgetBox.append(tgt,
         el('p', { class: 'eng-hint', text: 'Richtwerte: LEO ≈ 9,4 km/s inkl. typischer Aufstiegsverluste; GTO/TLI/Mars als LEO + Hohmann-Zusatz aus 200 km Parkbahn (selbst berechnet, siehe Orbit- und Missions-Tab). Reale Werte hängen von Startort, Bahnneigung und Flugprofil ab.' }));
+    } else {
+      heroBox.append(el('p', { class: 'eng-hint', text: 'Noch keine berechenbare Brennphase – Massen und Triebwerke eintragen.' }));
+      budgetBox.append(el('p', { class: 'muted small', text: '–' }));
+      resBox.append(el('p', { class: 'muted small', text: '–' }));
     }
-    if (res.error) resBox.append(el('p', { class: 'eng-error', text: res.error }));
+    if (res.error) heroBox.append(el('p', { class: 'eng-error', text: res.error }));
     const w = warnList(res.warn);
-    if (w) resBox.append(w);
+    if (w) heroBox.append(w);
     drawCharts(res);
     drawRocket();
   }
@@ -530,40 +568,7 @@ function buildRocket(panel) {
 
   function drawRocket() {
     clear(rocketBox);
-    const st = state.stages;
-    const mass = (s) => Math.max(0, (s.mp || 0) + (s.md || 0));
-    // Kernstapel = alle nicht-parallelen Stufen (bzw. letzte Stufe); Booster hängen an der Folgestufe
-    const core = st.map((s, i) => ({ s, i })).filter(({ s, i }) => !(s.parallel && i < st.length - 1));
-    const coreMass = core.reduce((a, c) => a + mass(c.s), 0) || 1;
-    const H = 300, W = 46, CX = 90, FAIR = 40, BELL = 14, MIN = 14;
-    const hs = core.map((c) => Math.max(MIN, (mass(c.s) / coreMass) * H));
-    const total = hs.reduce((a, b) => a + b, 0) + FAIR + BELL + 16;
-    const svg = sv('svg', { viewBox: `0 0 180 ${total.toFixed(0)}`, class: 'eng-svg', role: 'img', 'aria-label': 'Schematische Seitenansicht der Rakete, Stufenhöhen proportional zur Stufenmasse' });
-    let y = total - BELL - 4;
-    core.forEach((c, k) => {
-      const h = hs[k];
-      const color = STAGE_COLORS[c.i % STAGE_COLORS.length];
-      y -= h;
-      if (k === 0) svg.append(sv('path', { d: `M${CX - 14} ${y + h} L${CX + 14} ${y + h} L${CX + 19} ${y + h + BELL} L${CX - 19} ${y + h + BELL} Z`, class: 'bell' }));
-      // Booster dieser Stufe (Vorgänger mit parallel)
-      const prev = c.i > 0 ? st[c.i - 1] : null;
-      if (prev && prev.parallel) {
-        const bc = STAGE_COLORS[(c.i - 1) % STAGE_COLORS.length];
-        const bh = Math.min(h * 1.1, Math.max(MIN, (mass(prev) / 2 / coreMass) * H * 1.5));
-        for (const side of [-1, 1]) {
-          const bx = side < 0 ? CX - W / 2 - 22 : CX + W / 2;
-          svg.append(sv('rect', { x: bx, y: y + h - bh, width: 22, height: bh, rx: 4, fill: bc, class: 'booster' }));
-          svg.append(sv('path', { d: `M${bx} ${y + h - bh + 6} Q${bx + 11} ${y + h - bh - 16} ${bx + 22} ${y + h - bh + 6} Z`, fill: bc, class: 'booster' }));
-          svg.append(sv('path', { d: `M${bx + 4} ${y + h} L${bx + 18} ${y + h} L${bx + 20} ${y + h + 9} L${bx + 2} ${y + h + 9} Z`, class: 'bell' }));
-        }
-      }
-      const r = sv('rect', { x: CX - W / 2, y, width: W, height: h, rx: 3, fill: color, class: 'stage' });
-      r.append(sv('title', {}, `${c.s.name || `Stufe ${c.i + 1}`}: ${fmt(mass(c.s) / 1000, 1)} t`));
-      svg.append(r);
-      if (h >= 16) svg.append(sv('text', { x: CX, y: y + h / 2 + 4, 'text-anchor': 'middle', class: 'lbl' }, `S${c.i + 1}`));
-    });
-    svg.append(sv('path', { d: `M${CX - W / 2} ${y} C${CX - W / 2} ${y - FAIR * 0.6} ${CX - 6} ${y - FAIR} ${CX} ${y - FAIR} C${CX + 6} ${y - FAIR} ${CX + W / 2} ${y - FAIR * 0.6} ${CX + W / 2} ${y} Z`, class: 'fairing' }));
-    rocketBox.append(svg, el('p', { class: 'eng-hint', text: 'Höhen proportional zur Stufenmasse (Mindesthöhe für kleine Stufen), Booster seitlich an der Stufe, mit der sie brennen.' }));
+    rocketBox.append(rocketSvg(state.stages));
   }
 
   renderEditor();
@@ -581,25 +586,267 @@ function engineInfo(e) {
   return el('span', {}, parts.join(' · '), ' · ', srcLink(e.quelle), e.hinweis ? el('span', { class: 'eng-hint block', text: e.hinweis }) : null);
 }
 
-// Horizontales Balkendiagramm (SVG). rows: [{label, color, segs:[{v, cls, title}], text}]
+// Horizontales Balkendiagramm (SVG) mit Hintergrundspur und Raster. rows: [{label, color, segs:[{v, cls, title}], text}]
 function barChart(rows) {
-  const W = 340, RH = 26, LW = 64, TW = 74;
+  const W = 360, RH = 30, LW = 66, TW = 82, T = 4;
   const max = Math.max(...rows.map((r) => r.segs.reduce((a, s) => a + s.v, 0)), 1e-9);
-  const svg = sv('svg', { viewBox: `0 0 ${W} ${rows.length * RH + 4}`, class: 'eng-bars', role: 'img' });
+  const H = rows.length * RH + T + 2;
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'eng-bars', role: 'img' });
+  const span = W - LW - TW;
+  for (let k = 0; k <= 4; k++) svg.append(sv('line', { x1: LW + (span * k) / 4, x2: LW + (span * k) / 4, y1: T, y2: H - 2, class: 'grid' }));
   rows.forEach((r, i) => {
-    const y = i * RH + 4;
-    svg.append(sv('text', { x: 0, y: y + 14, class: 'lbl' }, r.label));
+    const y = i * RH + T;
+    svg.append(sv('rect', { x: LW, y: y + 5, width: span, height: 18, rx: 4, class: 'track' }));
+    svg.append(sv('text', { x: LW - 8, y: y + 18, 'text-anchor': 'end', class: 'lbl' }, r.label));
     let x = LW;
-    for (const s of r.segs) {
-      const w = (s.v / max) * (W - LW - TW);
-      const rect = sv('rect', { x, y: y + 2, width: Math.max(0, w), height: 16, rx: 3, fill: r.color, class: s.cls });
-      rect.append(sv('title', {}, s.title));
+    for (const sg of r.segs) {
+      const w = (sg.v / max) * span;
+      const rect = sv('rect', { x, y: y + 5, width: Math.max(0, w), height: 18, rx: 4, fill: r.color, class: sg.cls });
+      rect.append(sv('title', {}, sg.title));
       svg.append(rect);
       x += w;
     }
-    svg.append(sv('text', { x: x + 6, y: y + 14, class: 'val' }, r.text));
+    svg.append(sv('text', { x: x + 7, y: y + 18, class: 'val' }, r.text));
   });
   return svg;
+}
+
+// Δv-Bilanz: gestapelter Balken je Brennphase mit Markierungen der Zielbahnen
+function dvBudget(res, targets, W = 640) {
+  const H = 132, L = 8, R = 16, BY = 66, BH = 26;
+  const tot = res.dvTotal / 1000;
+  const max = Math.max(tot, ...targets.map((t) => t.dv)) * 1.06;
+  const sx = (v) => L + (v / max) * (W - L - R);
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'eng-budgetsvg', role: 'img', 'aria-label': `Δv-Bilanz: ${fmt(tot, 2)} km/s gesamt` });
+  for (let v = 0; v <= max; v += W < 480 ? 4 : 2) {
+    svg.append(sv('line', { x1: sx(v), x2: sx(v), y1: BY - 6, y2: BY + BH + 6, class: 'grid' }));
+    svg.append(sv('text', { x: sx(v), y: H - 6, 'text-anchor': 'middle', class: 'ax' }, `${fmt(v)}`));
+  }
+  svg.append(sv('text', { x: W - R, y: H - 6, 'text-anchor': 'end', class: 'ax' }, 'km/s'));
+  svg.append(sv('rect', { x: L, y: BY, width: W - L - R, height: BH, rx: 6, class: 'track' }));
+  let acc = 0;
+  for (const r of res.rows) {
+    const v = r.dv / 1000;
+    const x0 = sx(acc), x1 = sx(acc + v);
+    const c = STAGE_COLORS[r.idx % STAGE_COLORS.length];
+    const rect = sv('rect', { x: x0, y: BY, width: Math.max(0, x1 - x0), height: BH, fill: c, class: 'seg' });
+    rect.append(sv('title', {}, `${r.label}: ${fmt(v, 2)} km/s`));
+    svg.append(rect);
+    if (x1 - x0 > 64) svg.append(sv('text', { x: (x0 + x1) / 2, y: BY + 17, 'text-anchor': 'middle', class: 'in' }, `${r.label.replace('Stufe ', 'S').replace(' (parallel)', '∥').replace(' (Rest)', '')} · ${fmt(v, 1)}`));
+    acc += v;
+  }
+  // Ziele, Beschriftungen in drei Ebenen gestaffelt
+  [...targets].sort((a, b) => a.dv - b.dv).forEach((t, k) => {
+    const x = sx(t.dv);
+    const ok = tot >= t.dv;
+    const ly = 14 + (k % 3) * 15;
+    svg.append(sv('line', { x1: x, x2: x, y1: ly + 4, y2: BY + BH + 4, class: `mark${ok ? ' ok' : ''}` }));
+    svg.append(sv('text', { x, y: ly, 'text-anchor': x > W - 90 ? 'end' : 'middle', class: `tl${ok ? ' ok' : ''}` }, `${t.name} ${fmt(t.dv, 1)}`));
+  });
+  // Gesamtwert
+  svg.append(sv('path', { d: `M${sx(tot)} ${BY + BH + 2} l-5 8 h10 z`, class: 'tot' }));
+  return el('div', { class: 'eng-budgetfig' }, svg);
+}
+
+// --- Maßstäbliche Seitenansicht ----------------------------------------------------------------------------
+function hexMix(hex, f) { // f < 0 dunkler, f > 0 heller
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(f < 0 ? c * (1 + f) : c + (255 - c) * f));
+  return `#${ch.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+function propOf(stage) {
+  const e = engineById(stage.triebwerke?.[0]?.id);
+  const t = e?.treibstoff || '';
+  if (e?.art === 'fest') return { rho: 1750, fill: 0.88, name: 'Feststoff' };
+  if (t.includes('LH₂')) return { rho: 360, fill: 0.78, name: 'LH₂/LOX' };
+  if (t.includes('CH₄')) return { rho: 830, fill: 0.78, name: 'CH₄/LOX' };
+  if (t.includes('RP-1')) return { rho: 1030, fill: 0.78, name: 'RP-1/LOX' };
+  if (/N₂O₄|MON/.test(t)) return { rho: 1180, fill: 0.78, name: 'lagerfähig' };
+  return { rho: 1000, fill: 0.78, name: 'unbekannt' };
+}
+const engineCount = (s) => (s.triebwerke || []).reduce((a, g) => a + (g.anzahl > 0 ? g.anzahl : 0), 0);
+function boosterCount(s) {
+  const m = /^(\d+)\s*(×|x|\s)/i.exec(s.name || '');
+  return m ? Math.max(1, +m[1]) : 2;
+}
+function estLength(mp, D, prop) {
+  if (!(mp > 0) || !(D > 0)) return 3 * (D || 3);
+  const L = mp / prop.rho / ((Math.PI * D * D) / 4) / prop.fill + 0.3 * D;
+  return Math.min(Math.max(L, 0.8 * D), 40 * D);
+}
+
+function rocketSvg(st) {
+  const n = st.length;
+  const mass = (s) => Math.max(0, (s.mp || 0) + (s.md || 0));
+  const massTxt = (s) => (s.mp > 0 && s.md > 0 ? `${fmt(mass(s) / 1000, 1)} t` : 'Masse offen');
+  const totalT = st.reduce((a, s) => a + mass(s), 0) / 1000;
+  // Kernstapel und zugehörige Booster bestimmen
+  const parts = [];
+  let prevD = null;
+  let anyEst = false;
+  for (let i = 0; i < n; i++) {
+    const s = st[i];
+    if (s.parallel && i < n - 1) continue;
+    let D = s.D > 0 ? s.D : null, estD = false;
+    if (!D) { D = prevD ?? Math.min(12, Math.max(0.6, 0.55 * Math.cbrt(Math.max(totalT, 1)))); estD = true; }
+    let L = s.L > 0 ? s.L : null, estL = false;
+    if (!L) { L = estLength(s.mp, D, propOf(s)); estL = true; }
+    const part = { i, s, D, L, est: estD || estL, color: STAGE_COLORS[i % STAGE_COLORS.length], engines: engineCount(s) };
+    const b = i > 0 && st[i - 1].parallel ? st[i - 1] : null;
+    if (b) {
+      const nb = boosterCount(b);
+      let bD = b.D > 0 ? b.D : null, bEst = false;
+      if (!bD) { bD = Math.max(0.5, D * 0.42); bEst = true; }
+      let bL = b.L > 0 ? b.L : null;
+      if (!bL) { bL = Math.min(estLength((b.mp || 0) / nb, bD, propOf(b)), L * 1.05); bEst = true; }
+      part.booster = { i: i - 1, s: b, n: nb, D: bD, L: bL, est: bEst, color: STAGE_COLORS[(i - 1) % STAGE_COLORS.length], engines: Math.max(1, Math.round(engineCount(b) / nb)) };
+      anyEst ||= bEst;
+    }
+    anyEst ||= part.est;
+    parts.push(part);
+    prevD = D;
+  }
+  if (!parts.length) return el('p', { class: 'muted small', text: 'Keine Stufe definiert.' });
+  const top = parts[parts.length - 1];
+  const noseOnly = /starship|orion|dragon|sojus-raumschiff/i.test(top.s.name || '');
+  const fD = noseOnly ? top.D : Math.max(top.D, Math.min(top.D * 1.3, 5.4));
+  const fL = noseOnly ? 0 : fD * 2.4; // Raumschiff-Spitze liegt innerhalb der Stufenlänge
+  const noseL = noseOnly ? Math.min(top.D * 1.1, top.L * 0.4) : 0;
+  const b0 = parts[0];
+  const bellN = Math.min(Math.max(b0.engines, 1), 5);
+  const bellW = Math.min((b0.D * 0.92) / bellN, b0.D * 0.6);
+  const bellH = bellW * 1.15;
+  const stackL = parts.reduce((a, p) => a + p.L, 0);
+  const sink = bellH * 0.85; // Düsen liegen innerhalb der veröffentlichten Stufenlänge
+  const Hm = stackL + fL;
+  const halfWm = Math.max(...parts.map((p) => p.D / 2 + (p.booster ? p.booster.D + 0.15 : 0)), fD / 2);
+
+  const PADT = 34, PADB = 30, HPX = 440;
+  const k = Math.min(HPX / Hm, 150 / halfWm);
+  const halfW = halfWm * k;
+  const RX = 44; // Lineal
+  const CX = RX + 26 + halfW;
+  const LX = CX + halfW + 26; // Beschriftungen
+  const W = Math.max(LX + 196, 360);
+  const groundY = PADT + Hm * k;
+  const H = groundY + PADB;
+  const svg = sv('svg', { viewBox: `0 0 ${W.toFixed(0)} ${H.toFixed(0)}`, class: 'eng-svg rocket', role: 'img',
+    'aria-label': `Maßstäbliche Seitenansicht der Rakete, Höhe ${fmt(Hm, 1)} m` });
+  const defs = sv('defs');
+  svg.append(defs);
+  const grad = (color) => {
+    const id = nextId('g');
+    const g = sv('linearGradient', { id, x1: '0', x2: '1', y1: '0', y2: '0' });
+    g.append(sv('stop', { offset: '0', 'stop-color': hexMix(color, -0.55) }), sv('stop', { offset: '0.38', 'stop-color': hexMix(color, 0.18) }),
+      sv('stop', { offset: '0.62', 'stop-color': color }), sv('stop', { offset: '1', 'stop-color': hexMix(color, -0.6) }));
+    defs.append(g);
+    return `url(#${id})`;
+  };
+  const metal = grad('#9aa6c4');
+  const white = grad('#e8eefc');
+
+  // Lineal
+  const step = [1, 2, 5, 10, 20, 25, 50].find((x) => Hm / x <= 8) || 50;
+  svg.append(sv('line', { x1: RX, x2: RX, y1: groundY, y2: groundY - Hm * k, class: 'ruler' }));
+  for (let m = 0; m <= Hm + 1e-6; m += step) {
+    const y = groundY - m * k;
+    svg.append(sv('line', { x1: RX - 5, x2: RX, y1: y, y2: y, class: 'ruler' }), sv('text', { x: RX - 8, y: y + 3.5, 'text-anchor': 'end', class: 'tick' }, fmt(m)));
+    if (m > 0) svg.append(sv('line', { x1: RX + 4, x2: W - 6, y1: y, y2: y, class: 'hgrid' }));
+  }
+  svg.append(sv('text', { x: RX, y: groundY - Hm * k - 10, 'text-anchor': 'middle', class: 'tick u' }, 'm'));
+  svg.append(sv('line', { x1: RX - 6, x2: W - 6, y1: groundY, y2: groundY, class: 'ground' }));
+
+  const labels = [];
+  const bell = (x, y, w, h) => sv('path', { d: `M${x - w * 0.22} ${y} L${x + w * 0.22} ${y} L${x + w * 0.5} ${y + h} Q${x} ${y + h * 0.86} ${x - w * 0.5} ${y + h} Z`, fill: metal, class: 'bell' });
+
+  // Kernstapel von unten nach oben (erste Stufe ohne Düsenbereich)
+  let y = groundY - sink * k;
+  // Triebwerksglocken der ersten Kernstufe
+  for (let e = 0; e < bellN; e++) {
+    const bx = CX + ((e - (bellN - 1) / 2) * b0.D * 0.92 * k) / bellN;
+    svg.append(bell(bx, y, bellW * k, bellH * k));
+  }
+  let belowD = null;
+  for (const p of parts) {
+    const isTop = p === top;
+    const h = (p.L - (p === b0 ? sink : 0) - (isTop ? noseL : 0)) * k, w = p.D * k;
+    const y0 = y - h;
+    // Booster (seitlich, zwei sichtbar, weitere angedeutet)
+    if (p.booster) {
+      const bq = p.booster;
+      const bw = bq.D * k, bh = bq.L * k;
+      const nose = Math.min(bw * 1.6, bh * 0.25);
+      const fill = grad(bq.color);
+      const by1 = y + sink * k * 0.5; // Booster-Unterkante nahe der Startrampe
+      const draw = (bx, behind) => {
+        const g = sv('g', { class: `booster${behind ? ' behind' : ''}` });
+        g.append(sv('path', { d: `M${bx} ${by1} V${by1 - bh + nose} Q${bx} ${by1 - bh} ${bx + bw / 2} ${by1 - bh} Q${bx + bw} ${by1 - bh} ${bx + bw} ${by1 - bh + nose} V${by1} Z`, fill, class: 'body' }));
+        const bb = Math.min(bw * 0.8, bw);
+        g.append(bell(bx + bw / 2, by1, bb, bb * 0.9));
+        g.append(sv('title', {}, `${bq.s.name}: ${bq.n} × ${fmt(bq.L, 1)} m × Ø ${fmt(bq.D, 2)} m`));
+        svg.append(g);
+      };
+      if (bq.n >= 4) { draw(CX - w / 2 - bw * 0.55, true); draw(CX + w / 2 - bw * 0.45, true); }
+      draw(CX - w / 2 - bw, false);
+      draw(CX + w / 2, false);
+      labels.push({ y: by1 - bh / 2, x: CX + w / 2 + bw, color: bq.color,
+        t1: `S${bq.i + 1} · ${bq.s.name || 'Booster'}`, t2: `${bq.n} × ${bq.est ? '≈ ' : ''}${fmt(bq.L, 1)} m × Ø ${fmt(bq.D, 2)} m · ${massTxt(bq.s)}` });
+    }
+    const fill = grad(p.color);
+    // Übergangsadapter bei Durchmesserwechsel
+    let ad = 0;
+    if (belowD != null && Math.abs(belowD - p.D) > 0.05) {
+      ad = Math.min(p.L * 0.3, Math.abs(belowD - p.D) * 1.2 + 0.4) * k;
+      const wb = belowD * k;
+      svg.append(sv('path', { d: `M${CX - wb / 2} ${y} L${CX + wb / 2} ${y} L${CX + w / 2} ${y - ad} L${CX - w / 2} ${y - ad} Z`, fill: metal, class: 'adapter' }));
+    }
+    const r = sv('rect', { x: CX - w / 2, y: y0, width: w, height: h - ad, fill, class: `stage${p.est ? ' est' : ''}` });
+    r.append(sv('title', {}, `${p.s.name || `Stufe ${p.i + 1}`}: ${fmt(p.L, 1)} m × Ø ${fmt(p.D, 2)} m${p.est ? ' (teilweise geschätzt)' : ''}, ${massTxt(p.s)}`));
+    svg.append(r);
+    // Ringe (Tankdome angedeutet)
+    if (h > 26) svg.append(sv('line', { x1: CX - w / 2, x2: CX + w / 2, y1: y0 + (h - ad) * 0.42, y2: y0 + (h - ad) * 0.42, class: 'ring' }));
+    if (h >= 16 && w >= 16) svg.append(sv('text', { x: CX, y: y0 + (h - ad) / 2 + 4, 'text-anchor': 'middle', class: 'lbl' }, `S${p.i + 1}`));
+    labels.push({ y: y0 + h / 2, x: CX + w / 2, color: p.color,
+      t1: `S${p.i + 1} · ${p.s.name || `Stufe ${p.i + 1}`}`, t2: `${p.est ? '≈ ' : ''}${fmt(p.L, 1)} m × Ø ${fmt(p.D, 2)} m · ${massTxt(p.s)}` });
+    belowD = p.D;
+    y = y0;
+  }
+  // Verkleidung / Nase
+  const fw = fD * k, fh = fL * k;
+  const cyl = noseOnly ? 0 : fh * 0.38;
+  const tw = top.D * k;
+  if (noseOnly) {
+    const nh = noseL * k;
+    const yt2 = y - nh;
+    const nose = sv('path', { d: `M${CX - tw / 2} ${y} C${CX - tw / 2} ${yt2 + nh * 0.3} ${CX - tw * 0.18} ${yt2} ${CX} ${yt2} C${CX + tw * 0.18} ${yt2} ${CX + tw / 2} ${yt2 + nh * 0.3} ${CX + tw / 2} ${y} Z`, fill: grad(top.color), class: 'stage' });
+    nose.append(sv('title', {}, 'Spitze (Teil der obersten Stufe)'));
+    svg.append(nose);
+  }
+  if (!noseOnly && fw > tw + 0.5) svg.append(sv('path', { d: `M${CX - tw / 2} ${y} L${CX + tw / 2} ${y} L${CX + fw / 2} ${y - Math.min(cyl * 0.3, 8)} L${CX - fw / 2} ${y - Math.min(cyl * 0.3, 8)} Z`, fill: white, class: 'fairing' }));
+  const yb = y - (noseOnly ? 0 : Math.min(cyl * 0.3, 8));
+  const yt = y - fh;
+  const ww = noseOnly ? tw : fw;
+  const f = noseOnly ? null : sv('path', { d: `M${CX - ww / 2} ${yb} V${yb - cyl} C${CX - ww / 2} ${yt + (fh - cyl) * 0.25} ${CX - ww * 0.12} ${yt} ${CX} ${yt} C${CX + ww * 0.12} ${yt} ${CX + ww / 2} ${yt + (fh - cyl) * 0.25} ${CX + ww / 2} ${yb - cyl} V${yb} Z`,
+    fill: noseOnly ? grad(top.color) : white, class: 'fairing' });
+  if (f) { f.append(sv('title', {}, 'Nutzlastverkleidung (schematisch, Größe geschätzt)')); svg.append(f); }
+  if (!noseOnly) labels.push({ y: yt + fh * 0.45, x: CX + ww / 2, color: '#dfe7fb', t1: 'Nutzlastverkleidung', t2: 'schematisch' });
+
+  // Beschriftungen ohne Überlappung (von oben nach unten), mit Führungslinien
+  labels.sort((a, b) => a.y - b.y);
+  const GAP = 30;
+  let last = -Infinity;
+  for (const l of labels) { l.ly = Math.max(l.y, last + GAP); last = l.ly; }
+  const over = last - (groundY - 4);
+  if (over > 0) { let nxt = Infinity; for (let i = labels.length - 1; i >= 0; i--) { labels[i].ly = Math.min(labels[i].ly - over, nxt - GAP); nxt = labels[i].ly; } }
+  for (const l of labels) {
+    svg.append(sv('path', { d: `M${l.x + 2} ${l.y} L${LX - 10} ${l.ly} H${LX - 4}`, class: 'leader', stroke: l.color }));
+    svg.append(sv('circle', { cx: l.x + 2, cy: l.y, r: 2, fill: l.color }));
+    svg.append(sv('text', { x: LX, y: l.ly - 2, class: 'lt1', fill: hexMix(l.color, 0.35) }, l.t1.length > 30 ? `${l.t1.slice(0, 29)}…` : l.t1));
+    svg.append(sv('text', { x: LX, y: l.ly + 11, class: 'lt2' }, l.t2));
+  }
+  svg.append(sv('text', { x: W - 6, y: 16, 'text-anchor': 'end', class: 'hh' }, `Höhe ${anyEst ? '≈ ' : ''}${fmt(Hm, 1)} m`));
+  return el('div', { class: 'eng-rocketfig' }, svg,
+    el('p', { class: 'eng-hint', text: `Maßstäblich in Metern, Stufenlängen einschließlich Triebwerken. ${anyEst ? '„≈“ = aus Treibstoffmasse und -dichte geschätzt (exakte Werte unter „Abmessungen“ der Stufe eintragen). ' : ''}${noseOnly ? '' : 'Nutzlastverkleidung schematisch und nicht in den Stufenwerten enthalten. '}${parts.some((p) => p.booster && p.booster.n >= 4) ? 'Bei vier und mehr Boostern sind die hinteren angedeutet.' : ''}` }));
 }
 
 // =========================================================================================================
@@ -693,8 +940,9 @@ function buildMission(panel) {
   const out = el('div');
   const depLbl = el('div'), arrLbl = el('div');
 
-  panel.append(el('div', { class: 'eng-grid' },
+  panel.append(el('div', { class: 'eng-grid io' },
     el('div', { class: 'eng-col' },
+      colHead('Eingaben', 'Start- und Zielplanet, Park- und Zielbahn'),
       card('Transfer',
         el('div', { class: 'eng-row' },
           selectField('Von', opts, state.from, (v) => { state.from = v; update(); }),
@@ -714,7 +962,9 @@ function buildMission(panel) {
         ['φ = 180° − n₂ · t', 'Phasenwinkel: so weit muss das Ziel beim Start vorauslaufen'],
         'Reale Missionen nutzen elliptische Bahnen, Bahnneigungen, Swing-bys und Lambert-Lösungen – Werte können deutlich abweichen (z. B. Jupiter real oft per Venus-/Erd-Swing-by).',
       ])),
-    card('Ergebnis', out)));
+    el('div', { class: 'eng-col' },
+      colHead('Ergebnisse', 'Hohmann-Transfer, Patched Conics'),
+      card('Ergebnis', out))));
 
   function update() {
     clear(out);
@@ -726,8 +976,13 @@ function buildMission(panel) {
     const dep = state.hDep != null ? dvFromCircular(m.A.gm, m.A.rEq + state.hDep, m.vinfDep) : null;
     const arr = state.hArr != null ? dvFromCircular(m.B.gm, m.B.rEq + state.hArr, m.vinfArr) : null;
     out.append(
-      el('div', { class: 'eng-kpis' },
+      el('div', { class: 'eng-kpis hero' },
         kpi('Flugdauer', fmtDur(m.tof), `${fmt(m.tof / DAY, 0)} Tage`, 'hi'),
+        kpi('Δv gesamt', dep != null && arr != null ? `${fmt(dep + arr, 2)} km/s` : '–', 'ab Parkbahn bis Zielbahn', 'hi'),
+        kpi('Nächstes Fenster', fmtDur(m.syn), 'Abstand der Startfenster'),
+        kpi('C3 (Abflug)', `${fmt(m.vinfDep ** 2, 1)} km²/s²`)),
+      el('h4', { text: 'Alle Kennwerte' }),
+      el('div', { class: 'eng-kpis' },
         kpi('C3 (Abflug)', `${fmt(m.vinfDep ** 2, 2)} km²/s²`),
         kpi('v∞ Abflug', `${fmt(m.vinfDep, 3)} km/s`),
         kpi('Δv Abflug', dep != null ? `${fmt(dep, 3)} km/s` : '–', state.hDep != null ? `aus ${fmt(state.hDep)} km Kreisbahn` : null),
@@ -788,8 +1043,9 @@ function buildCraft(panel) {
   ];
   const engInfo = el('div', { class: 'eng-einfo' });
 
-  panel.append(el('div', { class: 'eng-grid' },
+  panel.append(el('div', { class: 'eng-grid io' },
     el('div', { class: 'eng-col' },
+      colHead('Eingaben', 'Massen- und Leistungsbudget je Subsystem'),
       card('Subsysteme',
         el('p', { class: 'eng-hint', text: 'Beispielwerte eines kleinen Satelliten – frei änderbar.' }),
         listBox,
@@ -805,6 +1061,7 @@ function buildCraft(panel) {
         'Ohne Batterieauslegung für Schattenphasen, ohne Leistungsbedarf des Antriebs im Budget (bei elektrischem Antrieb separat ausgewiesen).',
       ])),
     el('div', { class: 'eng-col' },
+      colHead('Ergebnisse', 'Budget, Solargenerator, Antrieb'),
       card('Budget', out),
       card('Solargenerator',
         distWrap,

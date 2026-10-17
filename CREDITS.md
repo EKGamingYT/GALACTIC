@@ -61,3 +61,8 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 - Kontext-Ebenen über CDS-HiPS: 2MASS (Skrutskie et al. 2006), AllWISE (Wright et al. 2010), DSS2 (STScI), Planck HFI (ESA).
 - HiPS-Standard: Fernique et al. 2015, A&A 578, A114. Namensauflösung: CDS Sesame/SIMBAD (Wenger et al. 2000).
 - Ingenieurstool: Triebwerks- und Raketendaten der Hersteller/Agenturen (Quelle je Eintrag in src/data/engines.js und launchers.js); Gravitationsparameter JPL DE440, Körperdaten NASA Planetary Fact Sheet.
+
+## Verzeichnis der Raumflugkörper (Ingenieurstool)
+- CelesTrak SATCAT, T. S. Kelso (celestrak.org/pub/satcat.csv; Codelisten Sources, Launch Sites, Status) – frei nutzbar mit Namensnennung; lokale Momentaufnahme in public/data/satcat.json (erzeugt mit scripts/fetch-satcat.mjs).
+- NASA NSSDCA Master Catalog („Facts in Brief": Masse, Leistung, Experimente) – gemeinfrei.
+- Wikidata (Masse P2067, Trägerrakete P375) – CC0. Wikipedia-Artikel nur als Link (CC BY-SA).
