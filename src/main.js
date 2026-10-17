@@ -20,6 +20,7 @@ import { createClock } from './lib/time.js';
 import { createSystemView } from './views/system.js';
 import { createGlobeView } from './views/globe.js';
 import { createSkyView } from './views/sky.js';
+import { createEngineerView } from './views/engineer.js';
 import { createTimebar } from './ui/timebar.js';
 import { placeName, nearbyArticles } from './lib/lexicon.js';
 
@@ -373,7 +374,8 @@ const globe = createGlobeView($('#view-body'), {
     layerBar.querySelectorAll('button').forEach((b) => (b.onclick = () => globe.setLayer(Number(b.dataset.i))));
   },
 });
-createSkyView($('#view-sky'));
+const sky = createSkyView($('#view-sky'));
+const engineer = createEngineerView($('#view-engineer'));
 
 createTimebar($('#view-system'), clock);
 clock.onChange(() => {
@@ -556,6 +558,8 @@ function route() {
   layerBar.classList.toggle('active', view === 'body');
   if (view !== 'body') mapStatus.hidden = true;
   system.setActive(view === 'system');
+  sky?.setActive?.(view === 'sky');
+  engineer?.setActive?.(view === 'engineer');
 
   if (view === 'body') {
     const body = mapBodyById(arg) || mapBodyById('earth');
@@ -563,7 +567,8 @@ function route() {
     mapSelect.value = body.id;
     $('#status').textContent = `Karte: ${body.name}`;
   } else {
-    if (view === 'sky') $('#status').textContent = 'SPHEREx · Vorschau';
+    if (view === 'sky') $('#status').textContent = 'Himmel · SPHEREx';
+    if (view === 'engineer') $('#status').textContent = 'Ingenieurstool';
   }
 }
 window.addEventListener('hashchange', route);
