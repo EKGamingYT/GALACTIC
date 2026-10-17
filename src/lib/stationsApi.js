@@ -45,6 +45,11 @@ export const adminDeleteRoute = (token, id) => rpc('admin_delete_route', { p_tok
 export const adminSetSetting = (token, key, value) => rpc('admin_set_setting', { p_token: token, p_key: key, p_value: value });
 export const getSettings = async () => Object.fromEntries((await request('site_settings?select=key,value')).map((r) => [r.key, r.value]));
 export const logVisit = (path, sid) => rpc('log_visit', { p_path: path, p_sid: sid });
+// Verweildauer; keepalive, damit der Aufruf auch beim Schließen des Tabs noch rausgeht
+export const logViewTime = (path, sid, seconds) => fetch(`${URL}/rest/v1/rpc/log_view_time`, {
+  method: 'POST', headers, keepalive: true, body: JSON.stringify({ p_path: path, p_sid: sid, p_seconds: seconds }),
+}).catch(() => {});
+export const adminDeleteKey = (token, id) => rpc('admin_delete_key', { p_token: token, p_key_id: id });
 
 // --- Stammdaten-Felder einer Organisation (Admin-Panel) -------------------------------------------------
 export const AGENCY_CATEGORIES = [

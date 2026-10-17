@@ -180,3 +180,15 @@
 .site-actions button { padding: 6px 12px; color: #04060d; font: 600 12px Inter, system-ui, sans-serif; background: linear-gradient(90deg, #6ea8ff, #b98cff); border: 0; border-radius: 8px; cursor: pointer; }
 .site-actions a { color: #9fc4ff; font-size: 12px; } .site-actions .site-src { color: var(--muted, #8a97b5); font-size: 11px; }
 @media (max-width: 720px) { .sites-toggle { top: auto; bottom: 118px; } .site-pop { bottom: 118px; } }
+
+/* --- Kartenknöpfe: sicher klickbar (eigene Ebene, große Trefferfläche, Touch ohne Verzögerung) ------- */
+.pl-toggle, .sites-toggle {
+  z-index: 8; min-height: 40px; min-width: 96px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  touch-action: manipulation; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s cubic-bezier(0.22, 0.8, 0.24, 1), border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.pl-toggle { top: 12px; } .sites-toggle { top: 60px; }
+.pl-toggle:hover, .sites-toggle:hover { transform: translateY(-1px); background: rgba(22, 32, 62, 0.92); }
+.pl-toggle:active, .sites-toggle:active { transform: scale(0.96); }
+.pl-panel, .site-pop { z-index: 9; }
+@media (max-width: 720px) { .pl-toggle, .sites-toggle { min-height: 44px; } }

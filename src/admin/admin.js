@@ -5,7 +5,7 @@
 import './admin.css';
 import {
   adminOverview, adminCreateAgency, adminUpdateAgency, adminDeleteAgency, adminIssueKey, adminSetKeyActive,
-  adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
+  adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, adminDeleteKey, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
 } from '../lib/stationsApi.js';
 
 const STORE = 'galactic_admin_token';
@@ -63,6 +63,7 @@ const fmtDate = (s) => { if (!s) return 'nie'; try { return new Date(s).toLocale
 const fmtNum = (n) => (n == null || n === '' ? '–' : Number(n).toLocaleString('de-DE'));
 const fmtDeg = (lat, lon) => (lat == null ? '–' : `${Math.abs(lat).toFixed(3)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(3)}° ${lon >= 0 ? 'O' : 'W'}`);
 const fmtKm = (m) => (m == null ? '–' : m >= 1000 ? `${(m / 1000).toLocaleString('de-DE', { maximumFractionDigits: 2 })} km` : `${Math.round(m)} m`);
+const fmtDur = (s) => { s = Math.round(s || 0); if (s < 60) return `${s} s`; if (s < 3600) return `${Math.floor(s / 60)} min ${s % 60 ? `${s % 60} s` : ''}`.trim(); return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`; };
 const norm = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 function getToken() { try { return sessionStorage.getItem(STORE); } catch { return null; } }
@@ -163,6 +164,7 @@ async function authenticateAndOpen(line, progress, term) {
   if (res === null) { auth.done('ABGELEHNT', 'bad'); setToken(null); await sleep(300); return showLogin(term, 'Token ungültig, gesperrt oder zu viele Fehlversuche.'); }
   auth.done('berechtigt');
   data = res;
+  try { localStorage.setItem('galactic_is_admin', '1'); } catch { /* egal */ }
   progress(0.6);
   (await line(`Organisationen geladen (${data.agencies.length})`, { delay: 140 })).done('OK');
   (await line(`Stationen ${data.stations.length} · Routen ${data.routes.length} · Schlüssel ${data.keys.length}`, { delay: 140 })).done('OK');
@@ -260,9 +262,12 @@ function renderTab(animate) {
 }
 
 // --- Übersicht ----------------------------------------------------------------------------------------
-function statCard(label, value, sub, tone, icon) {
+function statCard(label, value, sub, tone, icon, go) {
   const b = el('b', { text: '0' });
-  const card = el('div', { class: 'ab-stat', 'data-tone': tone || '' }, el('div', { class: 'ab-stat-ic' }, svg(ICON[icon], 18)), el('div', {}, b, el('span', { text: label }), sub ? el('small', { text: sub }) : null));
+  const card = el(go ? 'button' : 'div', { class: `ab-stat${go ? ' link' : ''}`, 'data-tone': tone || '', type: go ? 'button' : null, title: go ? `Zu „${TABS.find(([id]) => id === go)?.[1]}"` : null,
+    onclick: go ? () => { tab = go; renderTab(true); } : null },
+    el('div', { class: 'ab-stat-ic' }, svg(ICON[icon], 18)), el('div', {}, b, el('span', { text: label }), sub ? el('small', { text: sub }) : null),
+    go ? el('i', { class: 'ab-stat-go', text: '→' }) : null);
   countUp(b, value);
   return card;
 }
@@ -275,14 +280,14 @@ function countUp(node, target) {
 }
 function visitsChart(daily) {
   const days = [];
-  for (let i = 13; i >= 0; i--) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i); days.push(d.toISOString().slice(0, 10)); }
+  for (let i = 13; i >= 0; i--) { const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - i); days.push(d.toISOString().slice(0, 10)); } // Tage in UTC wie der Server
   const map = Object.fromEntries((daily || []).map((x) => [String(x.day).slice(0, 10), x]));
-  const vals = days.map((d) => map[d]?.views ?? 0), sess = days.map((d) => map[d]?.sessions ?? 0);
+  const vals = days.map((d) => map[d]?.visitors ?? 0), secs = days.map((d) => map[d]?.seconds ?? 0);
   const max = Math.max(1, ...vals);
   const wrap = el('div', { class: 'ab-chart' });
   days.forEach((d, i) => {
     const h = Math.round((vals[i] / max) * 100);
-    wrap.append(el('div', { class: 'ab-bar', title: `${new Date(d).toLocaleDateString('de-DE')}: ${vals[i]} Aufrufe, ${sess[i]} Sitzungen` },
+    wrap.append(el('div', { class: 'ab-bar', title: `${new Date(d).toLocaleDateString('de-DE')}: ${vals[i]} Besucher · ${fmtDur(secs[i])} Verweildauer gesamt` },
       el('i', { style: { height: `${Math.max(h, vals[i] ? 4 : 1)}%`, animationDelay: `${i * 30}ms` } }),
       el('span', { text: new Date(d).toLocaleDateString('de-DE', { day: '2-digit' }) })));
   });
@@ -302,13 +307,13 @@ function viewOverview() {
     m ? el('div', { class: 'ab-banner warn' }, el('b', { text: 'Wartungsmodus ist aktiv' }), el('span', { text: ' – Besucher sehen die Wartungsseite.' }),
       btn('Ändern', { kind: 'ghost', small: true, onclick: () => { tab = 'general'; renderTab(true); } })) : null,
     el('div', { class: 'ab-stats' },
-      statCard('Organisationen', data.agencies.length, `${data.agencies.filter((a) => a.is_reference).length} Referenz · ${data.agencies.filter((a) => !a.is_reference).length} eigene`, '', 'orgs'),
-      statCard('Schlüssel aktiv', activeKeys, `von ${data.keys.length} ausgegeben`, '', 'keys'),
-      statCard('Stationen', data.stations.length, `${new Set(data.stations.map((s) => s.body)).size} Himmelskörper`, '', 'stations'),
-      statCard('Routen', data.routes.length, '', '', 'routes'),
-      statCard('Aufrufe (24 h)', v.last24h ?? 0, `${v.sessions24h ?? 0} Sitzungen`, '', 'visits'),
+      statCard('Organisationen', data.agencies.length, `${data.agencies.filter((a) => a.is_reference).length} Referenz · ${data.agencies.filter((a) => !a.is_reference).length} eigene`, '', 'orgs', 'orgs'),
+      statCard('Schlüssel aktiv', activeKeys, `von ${data.keys.length} ausgegeben`, '', 'keys', 'keys'),
+      statCard('Stationen', data.stations.length, `${new Set(data.stations.map((s) => s.body)).size} Himmelskörper`, '', 'stations', 'stations'),
+      statCard('Routen', data.routes.length, 'geplante Verbindungen', '', 'routes', 'routes'),
+      statCard('Besucher (24 h)', v.visitors24h ?? 0, `${v.visitors7d ?? 0} in 7 Tagen`, '', 'visits', 'visits'),
       statCard('Fehlversuche (24 h)', (data.activity.failed_key_24h || 0) + (data.activity.failed_admin_24h || 0),
-        `Schlüssel ${data.activity.failed_key_24h} · Admin ${data.activity.failed_admin_24h}`, data.activity.failed_admin_24h ? 'danger' : data.activity.failed_key_24h ? 'warn' : '', 'general')),
+        `Schlüssel ${data.activity.failed_key_24h} · Admin ${data.activity.failed_admin_24h}`, data.activity.failed_admin_24h ? 'danger' : data.activity.failed_key_24h ? 'warn' : '', 'general', 'keys')),
     el('div', { class: 'ab-grid2' },
       el('section', { class: 'ab-card' }, el('h2', { text: 'Besucher · letzte 14 Tage' }), visitsChart(v.daily)),
       el('section', { class: 'ab-card' }, el('h2', { text: 'Letzte Aktivität' }),
@@ -347,7 +352,7 @@ function orgCard(a) {
   fact('Telefon', a.phone); fact('Ansprechpartner', a.contact_person); fact('Anschrift', a.address);
   const card = el('article', { class: 'ab-org' },
     el('div', { class: 'ab-org-head' },
-      el('div', { class: 'ab-avatar', text: initials || '?' }),
+      a.logo ? el('img', { class: 'ab-avatar img', src: a.logo, alt: `Logo ${a.name}`, loading: 'lazy' }) : el('div', { class: 'ab-avatar', text: initials || '?' }),
       el('div', { class: 'ab-org-title' }, el('h3', { text: a.name }),
         el('p', {}, a.short_name && a.short_name !== a.name ? el('b', { text: a.short_name }) : null,
           el('span', { text: [a.category, a.country].filter(Boolean).join(' · ') || 'ohne Kategorie' }))),
@@ -389,6 +394,22 @@ function openOrgDrawer(agency) {
   const groups = {};
   for (const f of AGENCY_FIELDS) (groups[f.group] ||= []).push(f);
   const form = el('form', { class: 'ab-orgform' });
+  // Logo: eigenes Bild hochladen (PNG/JPG/WebP/SVG) – wird verkleinert und als Bilddaten gespeichert
+  let logo = agency?.logo ?? '';
+  const preview = el('div', { class: 'ab-logo-prev' });
+  const drawPrev = () => preview.replaceChildren(logo ? el('img', { src: logo, alt: 'Logo-Vorschau' })
+    : el('span', { text: (inputs.short_name?.value || inputs.name?.value || '?').slice(0, 3).toUpperCase() }));
+  const file = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', class: 'ab-file' });
+  file.addEventListener('change', async () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    try { logo = await imageToDataUrl(f); drawPrev(); } catch (err) { toast(err.message, true); }
+  });
+  form.append(el('fieldset', {}, el('legend', { text: 'Logo' }),
+    el('div', { class: 'ab-logo-row' }, preview,
+      el('div', {}, el('p', { class: 'ab-hint', text: 'Optional – ohne eigenes Logo erscheint ein Emblem bzw. das Kürzel. Bilder werden auf 256 px verkleinert.' }),
+        el('div', { class: 'ab-row' }, el('label', { class: 'ab-btn ghost sm' }, svg(ICON.plus, 14), el('span', { text: 'Bild wählen' }), file),
+          btn('Entfernen', { kind: 'ghost danger', small: true, onclick: () => { logo = ''; file.value = ''; drawPrev(); } }))))));
   for (const [g, fields] of Object.entries(groups)) {
     const fs = el('fieldset', { class: g.includes('privat') ? 'private' : '' }, el('legend', { text: g }));
     if (g.includes('privat')) fs.append(el('p', { class: 'ab-hint', text: 'Nur im Admin-Panel sichtbar – nicht öffentlich abrufbar.' }));
@@ -407,6 +428,7 @@ function openOrgDrawer(agency) {
     e.preventDefault();
     const payload = {};
     for (const f of AGENCY_FIELDS) payload[f.key] = String(inputs[f.key].value ?? '').trim();
+    payload.logo = logo;
     const r = await act(save, () => (agency ? adminUpdateAgency(token, agency.id, payload) : adminCreateAgency(token, payload)),
       agency ? 'Organisation aktualisiert.' : 'Organisation angelegt.');
     if (r) close();
@@ -416,6 +438,7 @@ function openOrgDrawer(agency) {
       el('header', {}, el('h2', { text: agency ? `Bearbeiten: ${agency.name}` : 'Neue Organisation' }), btn('', { kind: 'ghost', icon: 'x', small: true, title: 'Schließen', onclick: close })),
       form));
   document.body.append(ov);
+  drawPrev();
   setTimeout(() => inputs.name.focus(), 50);
 }
 
@@ -424,6 +447,22 @@ async function issueKey(a, button) {
   if (label === null) return;
   const key = await act(button, () => adminIssueKey(token, a.id, label || null));
   if (key) showKeyOnce(a.name, key);
+}
+// Bild verkleinern (max. 256 px) und als data-URL liefern; SVG bleibt Vektor (wird nur per <img> gezeigt)
+async function imageToDataUrl(f) {
+  if (f.size > 3000000) throw new Error('Bild zu groß (max. 3 MB).');
+  if (f.type === 'image/svg+xml') {
+    const txt = await f.text();
+    if (txt.length > 250000) throw new Error('SVG zu groß.');
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(txt)));
+  }
+  const bmp = await createImageBitmap(f);
+  const s = Math.min(1, 256 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const url = c.toDataURL('image/webp', 0.9);
+  return url.startsWith('data:image/webp') ? url : c.toDataURL('image/png');
 }
 function promptBox(title, text) {
   return new Promise((resolve) => {
@@ -501,28 +540,36 @@ function viewKeys() {
     { head: 'Organisation', text: (k) => orgName(k.agency_id) },
     { head: 'Status', text: (k) => (k.active ? 'aktiv' : 'gesperrt'), cell: (k) => statusBadge(k.active ? 'aktiv' : 'gesperrt') },
     { head: 'Erstellt', text: (k) => fmtDate(k.created_at) }, { head: 'Zuletzt benutzt', text: (k) => fmtDate(k.last_used_at) },
-    { head: '', text: () => '', cell: (k) => btn(k.active ? 'Sperren' : 'Entsperren', { kind: k.active ? 'ghost danger' : 'ghost', small: true,
-      onclick: (e) => act(e.currentTarget, () => adminSetKeyActive(token, k.id, !k.active), k.active ? 'Schlüssel gesperrt.' : 'Schlüssel entsperrt.') }) },
+    { head: '', text: () => '', cell: (k) => el('div', { class: 'ab-row nowrap' },
+      btn(k.active ? 'Sperren' : 'Entsperren', { kind: 'ghost', small: true, icon: k.active ? 'x' : 'key',
+        onclick: (e) => act(e.currentTarget, () => adminSetKeyActive(token, k.id, !k.active), k.active ? 'Schlüssel gesperrt.' : 'Schlüssel entsperrt.') }),
+      btn('', { kind: 'ghost danger', small: true, icon: 'trash', title: 'Schlüssel löschen', onclick: async (e) => {
+        const b = e.currentTarget;
+        if (await confirmBox('Schlüssel löschen?', `„${k.label || 'ohne Bezeichnung'}" von ${orgName(k.agency_id)} endgültig löschen? Die Organisation kann damit sofort keine Stationen mehr anlegen oder ändern.`)) act(b, () => adminDeleteKey(token, k.id), 'Schlüssel gelöscht.');
+      } })) },
   ], 'Noch keine Schlüssel ausgegeben – über „Organisationen → Schlüssel ausgeben".', 'keySearch', 'Bezeichnung oder Organisation …');
 }
 
 // --- Besucher -------------------------------------------------------------------------------------------
 function viewVisits() {
   const v = data.visits || {};
-  const maxPath = Math.max(1, ...(v.paths || []).map((p) => p.views));
+  const dwell = v.dwell || [];
+  const maxS = Math.max(1, ...dwell.map((d) => d.seconds));
   return el('div', { class: 'ab-view' },
     el('div', { class: 'ab-stats' },
-      statCard('Aufrufe gesamt', v.total ?? 0, 'seit Beginn der Zählung', '', 'visits'),
-      statCard('Aufrufe (24 h)', v.last24h ?? 0, '', '', 'visits'),
-      statCard('Sitzungen (24 h)', v.sessions24h ?? 0, '', '', 'overview'),
-      statCard('Sitzungen (30 Tage)', v.sessions30d ?? 0, '', '', 'overview')),
+      statCard('Besucher gesamt', v.visitors_total ?? 0, 'eindeutige Sitzungen', '', 'visits'),
+      statCard('Besucher (24 h)', v.visitors24h ?? 0, '', '', 'visits'),
+      statCard('Besucher (7 Tage)', v.visitors7d ?? 0, '', '', 'overview'),
+      statCard('Besucher (30 Tage)', v.visitors30d ?? 0, '', '', 'overview'),
+      statCard('Ø Verweildauer', fmtDur(v.avg_session_s ?? 0), 'je Besuch (30 Tage)', '', 'general')),
     el('div', { class: 'ab-grid2' },
-      el('section', { class: 'ab-card' }, el('h2', { text: 'Aufrufe pro Tag (14 Tage)' }), visitsChart(v.daily)),
-      el('section', { class: 'ab-card' }, el('h2', { text: 'Meistbesuchte Ansichten (30 Tage)' }),
-        (v.paths || []).length ? el('ul', { class: 'ab-paths' }, v.paths.map((p) => el('li', {},
-          el('span', { text: pathLabel(p.path) }), el('i', { style: { width: `${(p.views / maxPath) * 100}%` } }), el('b', { text: fmtNum(p.views) }))))
-          : el('p', { class: 'ab-empty', text: 'Noch keine Besuche erfasst.' }))),
-    el('p', { class: 'ab-hint', text: 'Datenschutz: Es werden keine IP-Adressen oder personenbezogenen Daten gespeichert – nur Zeitpunkt, Ansicht und eine zufällige, gehashte Sitzungskennung. Einträge werden nach 180 Tagen gelöscht.' }));
+      el('section', { class: 'ab-card' }, el('h2', { text: 'Besucher pro Tag (14 Tage)' }), visitsChart(v.daily)),
+      el('section', { class: 'ab-card' }, el('h2', { text: 'Ansichten nach Verweildauer (30 Tage)' }),
+        dwell.length ? el('ul', { class: 'ab-paths' }, dwell.map((d) => el('li', {},
+          el('span', { text: pathLabel(d.path) }), el('i', { style: { width: `${(d.seconds / maxS) * 100}%` } }),
+          el('b', { text: fmtDur(d.seconds), title: `${d.visitors} Besucher · Ø ${fmtDur(d.avg)} je Besucher` }))))
+          : el('p', { class: 'ab-empty', text: 'Noch keine Verweildauer erfasst.' }))),
+    el('p', { class: 'ab-hint', text: 'Gezählt werden nur normale Besucher – Admins (angemeldet oder in der Admin-Vorschau) sind ausgeschlossen. „Meistbesucht" richtet sich nach der tatsächlich sichtbaren Verweildauer (Abschnitte unter 3 s zählen nicht), nicht nach Klicks – wiederholtes Rein- und Rausklicken verfälscht die Auswertung daher nicht. Gespeichert werden weder IP-Adressen noch personenbezogene Daten, nur eine zufällige, gehashte Sitzungskennung; Löschung nach 180 Tagen.' }));
 }
 function pathLabel(p) {
   if (p.startsWith('#/body/')) return `Karte: ${p.slice(7)}`;

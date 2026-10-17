@@ -2,7 +2,7 @@
 // Einstellungen kommen aus Supabase (site_settings, öffentlich lesbar). Antwortet der Server nicht schnell genug,
 // startet die App trotzdem (Wartung darf die Seite nicht durch Netzprobleme blockieren).
 import { ensureAccess } from './gate.js';
-import { getSettings, logVisit } from './lib/stationsApi.js';
+import { getSettings, logVisit, logViewTime } from './lib/stationsApi.js';
 
 const PREVIEW = 'galactic_admin_preview'; // vom Admin-Panel gesetzt: Seite trotz Wartung ansehen
 
@@ -13,9 +13,32 @@ function sessionId() {
     return s;
   } catch { return null; }
 }
+// Admins (im Admin-Panel angemeldet oder Admin-Vorschau) zählen nicht als Besucher
+function isAdmin() {
+  try { return localStorage.getItem('galactic_is_admin') === '1' || localStorage.getItem(PREVIEW) === '1'; } catch { return false; }
+}
+const viewPath = () => location.hash.split('?')[0] || '/';
 function countVisit() {
   const sid = sessionId();
-  if (sid) logVisit(location.hash.split('?')[0] || '/', sid).catch(() => {});
+  if (sid && !isAdmin()) logVisit(viewPath(), sid).catch(() => {});
+}
+
+// Verweildauer je Ansicht: zählt nur sichtbare Zeit; Abschnitte unter 3 s (schnelles Durchklicken) zählen nicht
+const dwell = { path: null, since: 0 };
+function dwellFlush() {
+  if (!dwell.path || !dwell.since) return;
+  const s = Math.round((performance.now() - dwell.since) / 1000);
+  const sid = sessionId();
+  if (sid && s >= 3 && !isAdmin()) logViewTime(dwell.path, sid, Math.min(s, 1800));
+  dwell.since = 0;
+}
+function dwellStart() { dwell.path = viewPath(); dwell.since = document.visibilityState === 'visible' ? performance.now() : 0; }
+function trackDwell() {
+  dwellStart();
+  window.addEventListener('hashchange', () => { dwellFlush(); dwellStart(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') dwellFlush(); else dwellStart(); });
+  window.addEventListener('pagehide', dwellFlush);
+  setInterval(() => { if (dwell.since && performance.now() - dwell.since > 600000) { dwellFlush(); dwellStart(); } }, 60000); // lange Sitzungen in 10-min-Abschnitten
 }
 
 function maintenanceScreen(message) {
@@ -74,5 +97,6 @@ async function start() {
   if (settings.announcement?.enabled) announcement(settings.announcement.text);
   countVisit();
   window.addEventListener('hashchange', countVisit);
+  trackDwell();
 }
 start();

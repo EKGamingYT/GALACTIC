@@ -766,3 +766,11 @@ input:focus-visible, canvas:focus-visible, .cesium-widget:focus-visible { outlin
 .sc-src { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
 .sc-src a { color: var(--accent); }
 @media (max-width: 560px) { .sc-grid { grid-template-columns: 1fr; } }
+
+/* --- Einheitliche Klick-Rückmeldung für Knöpfe ------------------------------------------------------ */
+button, .nav a, .sys-btn, .seg button, .chips button, .member-list button, .sp-list button, .actions a, .actions button {
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.seg button, .chips button, .sys-btn, .actions a, .actions button, .vc-toggle { transition: transform 0.15s var(--ease), background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s; }
+.seg button:active, .chips button:active, .sys-btn:active, .actions a:active, .actions button:active, .vc-toggle:active, .nav a:active { transform: scale(0.96); }
+.actions button:hover, .actions a:hover { box-shadow: 0 6px 18px rgba(110, 168, 255, 0.25); }

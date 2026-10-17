@@ -276,3 +276,16 @@ a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: un
   .ab-paths li { grid-template-columns: 110px 1fr 40px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
+/* --- Ergänzungen: Logos, anklickbare Kennzahlen ---------------------------------------------------- */
+.ab-avatar.img { object-fit: contain; padding: 0; background: rgba(4, 6, 13, 0.6); }
+.ab-stat.link { color: inherit; font: inherit; text-align: left; cursor: pointer; position: relative; }
+.ab-stat.link:hover { border-color: rgba(110, 168, 255, 0.55); box-shadow: 0 0 0 1px rgba(110, 168, 255, 0.25), 0 14px 34px rgba(0, 0, 0, 0.4); }
+.ab-stat-go { position: absolute; top: 12px; right: 14px; font-style: normal; color: var(--muted); opacity: 0; transform: translateX(-4px); transition: opacity 0.2s, transform 0.2s var(--ease); }
+.ab-stat.link:hover .ab-stat-go { opacity: 1; transform: none; color: var(--accent); }
+.ab-row.nowrap { flex-wrap: nowrap; justify-content: flex-end; }
+.ab-logo-row { display: flex; gap: 14px; align-items: center; margin-top: 8px; }
+.ab-logo-prev { display: grid; place-items: center; flex: none; width: 76px; height: 76px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px;
+  background: linear-gradient(135deg, rgba(110, 168, 255, 0.25), rgba(185, 140, 255, 0.25)); font: 700 15px var(--font-display); }
+.ab-logo-prev img { width: 100%; height: 100%; object-fit: contain; }
+.ab-file { position: absolute; width: 1px; height: 1px; opacity: 0; }
