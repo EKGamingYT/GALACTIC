@@ -7,6 +7,7 @@ import './isru.css';
 import { listStations } from '../../lib/stationsApi.js';
 import { getScales, surfaceRadiationNotice } from '../../lib/spaceWeather.js';
 import { every } from '../../lib/live.js';
+import { download, toCSV, stamp } from '../../lib/download.js';
 
 // Strahlung an der Oberfläche (Dosisäquivalent, galaktische kosmische Strahlung, ruhige Sonne):
 // Mond 1,369 mSv/Tag (Chang'e-4 LND, Zhang et al. 2020), Mars 0,64 mSv/Tag (Curiosity RAD, Hassler et al. 2014)
@@ -266,7 +267,10 @@ export function createIsruPanel(container) {
   root.append(
     el('div', { class: 'isru-head' },
       el('div', {}, el('h2', { text: 'Kolonie-Logistik' }),
-        el('p', { text: 'Lebenserhaltung (O₂, Wasser, Nahrung) und Energiemix einer Mond- oder Marsstation – mit Recycling und In-situ-Ressourcennutzung (ISRU).' }))),
+        el('p', { text: 'Lebenserhaltung (O₂, Wasser, Nahrung) und Energiemix einer Mond- oder Marsstation – mit Recycling und In-situ-Ressourcennutzung (ISRU).' })),
+      el('div', { class: 'isru-actions' },
+        el('button', { type: 'button', class: 'isru-btn', onclick: () => exportCSV() }, 'CSV'),
+        el('button', { type: 'button', class: 'isru-btn', onclick: () => printReport(), title: 'Drucken oder im Druckdialog „Als PDF speichern“' }, 'Bericht / PDF'))),
     el('div', { class: 'isru-grid' },
       el('div', { class: 'isru-col' },
         card('Standort & Besatzung', el('label', { class: 'isru-field' }, el('span', { text: 'Standort' }), site), siteNote,
@@ -287,6 +291,31 @@ export function createIsruPanel(container) {
       el('ul', {}, SOURCES.map(([t, u]) => el('li', {}, el('a', { href: u, target: '_blank', rel: 'noopener noreferrer', text: t }))))));
 
   let raf = 0, last = null;
+  function exportCSV() {
+    const p = params(), r = last;
+    if (!r) return;
+    const rows = [
+      ['Standort', r.site.name, ''], ['Besatzung', p.crew, 'Personen'], ['Missionsdauer', p.days, 'Tage'],
+      ['Wasser-Rückgewinnung', p.waterRec * 100, '%'], ['O₂-Rückgewinnung aus CO₂', p.o2Closure * 100, '%'],
+      ['Eis-Abbau', r.site.ice ? p.ice : 0, 'kg/Tag'], ['O₂ aus Mars-CO₂', r.site.mars ? p.moxie : 0, 'kg/Tag'],
+      ['Solarfläche', p.area, 'm²'], ['Zellwirkungsgrad', p.eta * 100, '%'], ['Kernspaltung', p.fission * 40, 'kWe'], ['RTG', p.rtg * 0.11, 'kWe'], ['Batterie', p.battery, 'kWh'],
+      ['Ø Erzeugung', r.avgGen, 'kW'], ['Ø Last', r.avgLoad, 'kW'], ['Stromausfall je Zyklus', r.outH, 'h'], ['Energiedefizit je Zyklus', r.deficit, 'kWh'],
+      ['Speicher für Nullausfall', r.drawdown, 'kWh'], ['ISRU-Auslastung', r.isruFrac * 100, '%'],
+      ['O₂-Bedarf', r.o2.need, 'kg/Tag'], ['O₂ aus Rückgewinnung', r.o2.loop, 'kg/Tag'], ['O₂ aus ISRU', r.o2.isru, 'kg/Tag'], ['O₂ aus Elektrolyse', r.o2.elec, 'kg/Tag'],
+      ['Wasser-Recycling', r.water.rec, 'kg/Tag'], ['Wasser aus ISRU', r.water.isru, 'kg/Tag'], ['Wasser-Nachschub', r.water.resupply, 'kg/Tag'],
+      ['Nahrung (Nachschub)', r.food, 'kg/Tag'], ['Nachschub von der Erde', r.resupplyYear, 'kg/Jahr'],
+      ['Energiemix Solar', r.mix.solar / (r.period / 24), 'kWh/Tag'], ['Energiemix Kernspaltung', r.mix.fission / (r.period / 24), 'kWh/Tag'], ['Energiemix RTG', r.mix.rtg / (r.period / 24), 'kWh/Tag'],
+    ].map(([k, v, u]) => ({ k, v: typeof v === 'number' ? Math.round(v * 100) / 100 : v, u }));
+    download(`galactic-kolonie-${p.site}-${stamp()}.csv`, toCSV(rows, [['Größe', (x) => x.k], ['Wert', (x) => x.v], ['Einheit', (x) => x.u]]), 'text/csv');
+  }
+  function printReport() {
+    document.body.classList.add('print-isru');
+    const done = () => { document.body.classList.remove('print-isru'); removeEventListener('afterprint', done); };
+    addEventListener('afterprint', done);
+    root.querySelector('.isru-src').open = true;
+    if (last) drawChart(canvas, last);
+    window.print();
+  }
   const params = () => ({ site: site.value, flex: flex.checked, ...Object.fromEntries(Object.entries(f).map(([k, s]) => [k, s.get()])) });
   function update() {
     const p = params();

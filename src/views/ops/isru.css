@@ -1,5 +1,9 @@
 /* Kolonie-Logistik (ISRU) – nutzt die Design-Variablen aus style.css (:root) */
 .isru { display: flex; flex-direction: column; gap: 16px; color: var(--text); }
+.isru-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 20px; }
+.isru-actions { display: flex; gap: 8px; }
+.isru-btn { padding: 7px 13px; font: 600 12.5px Inter, system-ui, sans-serif; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; transition: border-color .15s, transform .15s; }
+.isru-btn:hover { border-color: var(--accent); } .isru-btn:active { transform: scale(0.96); }
 .isru-head h2 { margin: 0; font-family: var(--font-display); font-size: 18px; letter-spacing: 0.08em; }
 .isru-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 760px; }
 .isru-grid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -47,3 +51,16 @@
 .isru-src summary { cursor: pointer; color: var(--text-2); }
 .isru-src a { color: var(--accent); }
 .isru-src ul { padding-left: 18px; display: grid; gap: 4px; }
+
+/* Druck/PDF: nur der Bericht, helle Farben */
+@media print {
+  body.print-isru * { visibility: hidden !important; }
+  body.print-isru .isru, body.print-isru .isru * { visibility: visible !important; }
+  body.print-isru .isru { position: absolute; left: 0; top: 0; width: 100%;
+    --text: #111; --text-2: #333; --muted: #555; --surface: #fff; --surface-2: #f4f6fa; --line: #ccd3e0; --line-soft: #e3e8f0; color: #111; }
+  body.print-isru .isru-card { background: #fff !important; break-inside: avoid; }
+  body.print-isru .isru-grid { grid-template-columns: 1fr 1.4fr; }
+  body.print-isru .isru-actions, body.print-isru input[type='range'] { display: none !important; }
+  body.print-isru .isru-bar i, body.print-isru .isru-legend i { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.print-isru .ops, body.print-isru #stage, body.print-isru .view { position: static !important; overflow: visible !important; }
+}

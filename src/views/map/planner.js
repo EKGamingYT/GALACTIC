@@ -5,6 +5,7 @@
 //    (Art, Status, Radius, Besatzung, Beschreibung), eigene Stationen bearbeiten/löschen, Routen zeichnen
 // Alle Texte aus der Datenbank werden nur über textContent ausgegeben (kein innerHTML mit Fremddaten).
 import { every } from '../../lib/live.js';
+import { download, toCSV, stamp } from '../../lib/download.js';
 import { getScales, surfaceRadiationNotice } from '../../lib/spaceWeather.js';
 import {
   Cartesian3, Cartographic, Color, HeightReference, LabelStyle, VerticalOrigin, Math as CesiumMath, ConstantProperty,
@@ -119,6 +120,36 @@ export function createPlanner({ viewer, body, ellipsoid, root, hasTerrain }) {
       }
       panel.append(rl);
     }
+    if (stations.length || routes.length) {
+      panel.append(el('div', { class: 'pl-export' }, el('span', { text: 'Export:' }),
+        el('button', { type: 'button', class: 'pl-link', onclick: exportCSV }, 'CSV'),
+        el('button', { type: 'button', class: 'pl-link', onclick: exportGeoJSON, title: 'Für GIS-Programme (QGIS …); Koordinaten auf dem jeweiligen Himmelskörper' }, 'GeoJSON')));
+    }
+  }
+
+  // --- Export (nur öffentliche Planungsdaten dieses Himmelskörpers) ----------------------------------------
+  function exportCSV() {
+    download(`galactic-stationen-${body.id}-${stamp()}.csv`, toCSV(stations, [
+      ['Name', (x) => x.name], ['Organisation', (x) => x.agency?.name], ['Land', (x) => x.agency?.country], ['Art', (x) => STATION_KINDS[x.kind] ?? x.kind],
+      ['Status', (x) => x.status], ['Breite', (x) => x.lat], ['Länge', (x) => x.lon], ['Radius (m)', (x) => x.radius_m], ['Besatzung', (x) => x.crew],
+      ['Beschreibung', (x) => x.description], ['Angelegt', (x) => x.created_at], ['Geändert', (x) => x.updated_at],
+    ]), 'text/csv');
+    if (routes.length) {
+      download(`galactic-routen-${body.id}-${stamp()}.csv`, toCSV(routes, [
+        ['Name', (r) => r.name], ['Art', (r) => ROUTE_KINDS[r.kind] ?? r.kind], ['Station', (r) => r.station?.name],
+        ['Länge (km)', (r) => Math.round(pathLength(r.points.map(([lat, lon]) => ({ lat, lon }))) / 10) / 100], ['Punkte (Breite/Länge)', (r) => r.points.map((p) => p.join(' ')).join(', ')],
+      ]), 'text/csv');
+    }
+  }
+  function exportGeoJSON() {
+    const features = [
+      ...stations.map((x) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [x.lon, x.lat] },
+        properties: { typ: 'station', name: x.name, organisation: x.agency?.name, art: x.kind, status: x.status, radius_m: x.radius_m, besatzung: x.crew, beschreibung: x.description } })),
+      ...routes.map((r) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: r.points.map(([lat, lon]) => [lon, lat]) },
+        properties: { typ: 'route', name: r.name, art: r.kind, station: r.station?.name } })),
+    ];
+    download(`galactic-planung-${body.id}-${stamp()}.geojson`, JSON.stringify({ type: 'FeatureCollection', name: `G.A.L.A.C.T.I.C. Planung ${body.name}`,
+      himmelskoerper: body.id, features }, null, 1), 'application/geo+json');
   }
 
   // --- Daten --------------------------------------------------------------------------------------------

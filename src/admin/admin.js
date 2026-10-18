@@ -9,6 +9,7 @@ import {
 } from '../lib/stationsApi.js';
 import { mappedBodies } from '../data/bodies.js';
 import { every } from '../lib/live.js';
+import { download, toCSV, stamp } from '../lib/download.js';
 
 const STORE = 'galactic_admin_token';
 const BYPASS = 'galactic_admin_preview';
@@ -746,6 +747,9 @@ function viewAudit() {
       { head: 'Details', text: (r) => auditDetails(r), cell: (r) => el('small', { class: 'ab-perm', text: auditDetails(r) }) },
     ], 'Noch keine Einträge. Ab jetzt wird jede Änderung an Organisationen, Schlüsseln, Stationen, Routen und Einstellungen protokolliert.',
     'auditSearch', 'Akteur, Organisation, Objekt …');
+    v.querySelector('.ab-toolbar')?.append(btn('CSV', { kind: 'ghost', small: true, title: 'Audit-Log als CSV herunterladen', onclick: () =>
+      download(`galactic-audit-${stamp()}.csv`, toCSV(rows, [['Zeit (UTC)', (r) => r.ts], ['Akteur', (r) => r.actor], ['Organisation', (r) => r.agency],
+        ['Aktion', (r) => `${AUDIT_TBL[r.tbl] || r.tbl} ${AUDIT_ACT[r.action] || r.action}`], ['Objekt', (r) => r.target], ['Details', (r) => auditDetails(r)]]), 'text/csv') }));
     box.replaceWith(v);
   }).catch((e) => { box.firstChild.replaceChildren(el('p', { class: 'ab-hint', text: e.message || 'Fehler' })); });
   return box;
