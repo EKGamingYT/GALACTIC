@@ -8,6 +8,7 @@ import {
   adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, adminDeleteKey, adminKeyQuotas, adminUpdateKey, adminAudit, KEY_PERMS, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
 } from '../lib/stationsApi.js';
 import { mappedBodies } from '../data/bodies.js';
+import { every } from '../lib/live.js';
 
 const STORE = 'galactic_admin_token';
 const BYPASS = 'galactic_admin_preview';
@@ -232,7 +233,24 @@ const TABS = [
 ];
 const ICON_FOR = { overview: 'overview', orgs: 'orgs', stations: 'stations', routes: 'routes', keys: 'keys', visits: 'visits', audit: 'audit', general: 'general' };
 
+// Live: Panel-Daten alle 30 s neu laden – nicht während Dialoge offen sind oder getippt wird
+let stopLive = null, quiet = false; // quiet: stilles Nachladen ohne Zähl-Animation
+function startLive() {
+  stopLive?.();
+  stopLive = every(30000, async () => {
+    if (!data || token === 'dev-preview') return;
+    if (document.querySelector('.ab-modal, .ab-drawer-wrap')) return;
+    const a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && app.contains(a)) return;
+    const y = app.querySelector('.ab-content')?.scrollTop;
+    quiet = true;
+    try { await reload(); } finally { quiet = false; }
+    const c = app.querySelector('.ab-content'); if (c && y) c.scrollTop = y;
+  });
+}
+
 function renderShell() {
+  startLive();
   const nav = el('nav', { class: 'ab-nav', 'aria-label': 'Bereiche' });
   for (const [id, label] of TABS) {
     nav.append(el('button', { class: `ab-navbtn${tab === id ? ' on' : ''}`, 'data-tab': id, onclick: () => { tab = id; renderTab(true); } },
@@ -279,7 +297,7 @@ function statCard(label, value, sub, tone, icon, go) {
 }
 function countUp(node, target) {
   const n = Number(target);
-  if (!Number.isFinite(n) || reduced) { node.textContent = typeof target === 'number' ? fmtNum(target) : String(target); return; }
+  if (!Number.isFinite(n) || reduced || quiet) { node.textContent = typeof target === 'number' ? fmtNum(target) : String(target); return; }
   const t0 = performance.now();
   const step = (t) => { const k = Math.min(1, (t - t0) / 700); node.textContent = fmtNum(Math.round(n * (1 - (1 - k) ** 3))); if (k < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step);

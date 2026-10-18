@@ -4,6 +4,7 @@
 //  • mit Stationsschlüssel (nur Raumfahrtorganisationen, vergeben im Admin-Panel): Station platzieren
 //    (Art, Status, Radius, Besatzung, Beschreibung), eigene Stationen bearbeiten/löschen, Routen zeichnen
 // Alle Texte aus der Datenbank werden nur über textContent ausgegeben (kein innerHTML mit Fremddaten).
+import { every } from '../../lib/live.js';
 import {
   Cartesian3, Cartographic, Color, HeightReference, LabelStyle, VerticalOrigin, Math as CesiumMath, ConstantProperty,
   sampleTerrainMostDetailed, EllipsoidGeodesic,
@@ -293,10 +294,12 @@ export function createPlanner({ viewer, body, ellipsoid, root, hasTerrain }) {
   // gespeicherten Schlüssel still prüfen
   if (key) checkKey(key).then((a) => { if (a) agency = a; else { key = null; sessionStorage.removeItem(KEY_STORE); } if (!panel.hidden) render(); }).catch(() => {});
   load();
+  // Live: Stationen/Routen anderer Organisationen erscheinen ohne Neuladen (nicht während Eingabe/Zeichnen)
+  const stopLive = every(60000, load, { skip: () => !!mode || panel.contains(document.activeElement) });
 
   return {
     click,
     active: () => !!mode,
-    dispose() { for (const e of [...drawn, ...temp]) entities.remove(e); btn.remove(); panel.remove(); viewer.container.style.cursor = ''; },
+    dispose() { stopLive(); for (const e of [...drawn, ...temp]) entities.remove(e); btn.remove(); panel.remove(); viewer.container.style.cursor = ''; },
   };
 }

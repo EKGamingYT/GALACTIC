@@ -3,6 +3,7 @@
 // startet die App trotzdem (Wartung darf die Seite nicht durch Netzprobleme blockieren).
 import { ensureAccess } from './gate.js';
 import { getSettings, logVisit, logViewTime } from './lib/stationsApi.js';
+import { every } from './lib/live.js';
 
 const PREVIEW = 'galactic_admin_preview'; // vom Admin-Panel gesetzt: Seite trotz Wartung ansehen
 
@@ -70,7 +71,9 @@ function announcement(text) {
   let dismissed = '';
   try { dismissed = sessionStorage.getItem('galactic_banner_off') || ''; } catch { /* egal */ }
   if (dismissed === text) return;
+  document.getElementById('galactic-banner')?.remove();
   const bar = document.createElement('div');
+  bar.id = 'galactic-banner';
   bar.setAttribute('role', 'status');
   bar.style.cssText = 'position:fixed;left:50%;top:64px;z-index:40;transform:translateX(-50%);display:flex;gap:12px;align-items:center;max-width:min(720px,calc(100vw - 24px));'
     + 'padding:9px 10px 9px 16px;color:#e8eefc;font:13px/1.4 Inter,system-ui,sans-serif;background:rgba(14,24,52,.92);border:1px solid rgba(110,168,255,.45);'
@@ -95,6 +98,14 @@ async function start() {
   if (settings.maintenance?.enabled && !preview) { maintenanceScreen(settings.maintenance.message); return; }
   await import('./main.js');
   if (settings.announcement?.enabled) announcement(settings.announcement.text);
+  // Live: Wartungsmodus und Hinweisbanner greifen auch bei lange offenem Fenster (alle 2 min)
+  let lastText = settings.announcement?.enabled ? settings.announcement.text : '';
+  every(120000, async () => {
+    const s = await getSettings();
+    if (s.maintenance?.enabled && !preview && !isAdmin()) { location.reload(); return; }
+    const text = s.announcement?.enabled ? s.announcement.text : '';
+    if (text !== lastText) { lastText = text; document.getElementById('galactic-banner')?.remove(); announcement(text); }
+  });
   countVisit();
   window.addEventListener('hashchange', countVisit);
   trackDwell();
