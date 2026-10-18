@@ -66,3 +66,10 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 - CelesTrak SATCAT, T. S. Kelso (celestrak.org/pub/satcat.csv; Codelisten Sources, Launch Sites, Status) – frei nutzbar mit Namensnennung; lokale Momentaufnahme in public/data/satcat.json (erzeugt mit scripts/fetch-satcat.mjs).
 - NASA NSSDCA Master Catalog („Facts in Brief": Masse, Leistung, Experimente) – gemeinfrei.
 - Wikidata (Masse P2067, Trägerrakete P375) – CC0. Wikipedia-Artikel nur als Link (CC BY-SA).
+
+## Mission Control
+- **Deep Space Network – „DSN Now“** (NASA/JPL, eyes.nasa.gov/dsn, öffentlicher Feed; NASA Media Usage Guidelines) – Live-Status der Antennen
+- **NOAA Space Weather Prediction Center** (services.swpc.noaa.gov, gemeinfrei, US-Regierungswerk) – NOAA-Skalen, Kp, Sonnenwind (RTSW), GOES-Röntgen/Protonen, Flares, Meldungen
+- **NASA DONKI** (api.nasa.gov, CCMC) – koronale Massenauswürfe
+- Magnetopausen-Modell: Shue et al. (1998), JGR 103; Mondbahn: J. Meeus, *Astronomical Algorithms* Kap. 47
+- **Kolonie-Logistik:** NASA BVAD (NASA/TP-2015-218570/REV2), NASA ISS-Wasserrückgewinnung (2023), MOXIE (Hecht et al. 2021), NASA Fission Surface Power, NASA RPS/MMRTG, Mazarico et al. (2011, Icarus), NIST Chemistry WebBook, Kopp & Lean (2011), NASA Mars Fact Sheet – einzelne Energiekennwerte sind gekennzeichnete Modellannahmen

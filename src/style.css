@@ -568,8 +568,13 @@ input:focus-visible, canvas:focus-visible, .cesium-widget:focus-visible { outlin
   .status small { display: none; }
   .search input { width: 170px; }
 }
-@media (max-width: 1259px) {
+@media (max-width: 1439px) {
   .status { display: none; }
+}
+/* sechs Menüpunkte: Beschriftung nur für die aktive Ansicht, sobald es eng wird */
+@media (max-width: 1260px) {
+  .nav a:not(.on) { padding: 0 11px; }
+  .nav a:not(.on) span { display: none; }
 }
 @media (max-width: 1100px) {
   .brand-sub { display: none; }

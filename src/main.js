@@ -21,6 +21,7 @@ import { createSystemView } from './views/system.js';
 import { createGlobeView } from './views/globe.js';
 import { createSkyView } from './views/sky.js';
 import { createEngineerView } from './views/engineer.js';
+import { createOpsView } from './views/ops/ops.js';
 import { createTimebar } from './ui/timebar.js';
 import { placeName, nearbyArticles } from './lib/lexicon.js';
 
@@ -376,6 +377,7 @@ const globe = createGlobeView($('#view-body'), {
 });
 const sky = createSkyView($('#view-sky'));
 const engineer = createEngineerView($('#view-engineer'));
+const ops = createOpsView($('#view-ops'));
 
 createTimebar($('#view-system'), clock);
 clock.onChange(() => {
@@ -560,6 +562,7 @@ function route() {
   system.setActive(view === 'system');
   sky?.setActive?.(view === 'sky');
   engineer?.setActive?.(view === 'engineer');
+  ops?.setActive?.(view === 'ops', arg);
 
   if (view === 'body') {
     const body = mapBodyById(arg) || mapBodyById('earth');
@@ -569,6 +572,7 @@ function route() {
   } else {
     if (view === 'sky') $('#status').textContent = 'Himmel · SPHEREx';
     if (view === 'engineer') $('#status').textContent = 'Ingenieurstool';
+    if (view === 'ops') $('#status').textContent = 'Mission Control';
   }
 }
 window.addEventListener('hashchange', route);

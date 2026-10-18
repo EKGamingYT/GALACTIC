@@ -1,0 +1,20 @@
+/* Mission Control – Rahmen mit Unterseiten; eigener Scroll-Container (.view sperrt Gesten) */
+.ops {
+  position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+  touch-action: pan-x pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(61, 220, 132, 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(110, 168, 255, 0.08), transparent 60%),
+    var(--bg);
+}
+.ops-wrap { max-width: 1240px; margin: 0 auto; padding: 22px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); }
+.ops-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 18px; }
+.ops-title {
+  margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.1em;
+  background: linear-gradient(90deg, #fff 0%, #cfe0ff 50%, #c9ffdf 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.ops-tabs { flex-wrap: wrap; max-width: 100%; }
+.ops-tabs button { padding: 7px 13px; font-size: 13px; }
+.ops-pane { animation: ops-fade 0.25s ease both; color: var(--text); }
+.ops-pane[hidden] { display: none; }
+@keyframes ops-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

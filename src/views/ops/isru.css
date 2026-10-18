@@ -1,0 +1,49 @@
+/* Kolonie-Logistik (ISRU) – nutzt die Design-Variablen aus style.css (:root) */
+.isru { display: flex; flex-direction: column; gap: 16px; color: var(--text); }
+.isru-head h2 { margin: 0; font-family: var(--font-display); font-size: 18px; letter-spacing: 0.08em; }
+.isru-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 760px; }
+.isru-grid { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .isru-grid { grid-template-columns: minmax(0, 1fr); } }
+.isru-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.isru-card {
+  padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: var(--radius); min-width: 0;
+  background: var(--surface); background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 52px);
+}
+.isru-card h3 { margin: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-2); }
+.isru-field { display: grid; gap: 6px; margin: 0 0 12px; font-size: 13px; }
+.isru-field[hidden] { display: none; }
+.isru-field > span { display: flex; justify-content: space-between; gap: 8px; color: var(--text-2); }
+.isru-field output { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+.isru-field input[type='range'] { width: 100%; accent-color: var(--accent); }
+.isru-field select {
+  width: 100%; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: var(--field); color: var(--text); font: inherit;
+}
+.isru-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.isru-check input { accent-color: var(--accent); margin-top: 2px; }
+.isru-note { margin: -4px 0 12px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.isru-bals .isru-note { margin: 4px 0 0; }
+
+.isru-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.isru-kpi { padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-soft); background: var(--surface-2); display: grid; gap: 4px; }
+.isru-kpi span { font-size: 11.5px; color: var(--muted); }
+.isru-kpi b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.isru-kpi.ok b { color: var(--ok); } .isru-kpi.warn b { color: var(--warm); } .isru-kpi.bad b { color: #ff6b7a; }
+.isru-chart { display: block; width: 100%; height: 260px; }
+
+.isru-bals { display: grid; gap: 14px; }
+.isru-bal-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+.isru-bal-head span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.isru-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--line-soft); }
+.isru-bar.big { height: 18px; }
+.isru-bar i { display: block; height: 100%; transition: width 0.35s var(--ease); }
+.isru-bar i + i { box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.35); }
+.isru-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12px; color: var(--text-2); }
+.isru-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.isru-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.isru-mix .isru-note { margin: 8px 0 0; }
+.isru-advice { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--text-2); line-height: 1.45; }
+.isru-src { font-size: 12px; color: var(--muted); }
+.isru-src summary { cursor: pointer; color: var(--text-2); }
+.isru-src a { color: var(--accent); }
+.isru-src ul { padding-left: 18px; display: grid; gap: 4px; }
