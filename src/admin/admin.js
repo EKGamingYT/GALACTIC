@@ -233,6 +233,38 @@ const TABS = [
 ];
 const ICON_FOR = { overview: 'overview', orgs: 'orgs', stations: 'stations', routes: 'routes', keys: 'keys', visits: 'visits', audit: 'audit', general: 'general' };
 
+// Benachrichtigungen: neue Aktivität von Organisationen (Audit-Einträge, die nicht vom Admin stammen) und neue Fehlversuche
+const SEEN = 'galactic_audit_seen';
+const notice = { audit: 0, maxId: 0, failed: null };
+const baseTitle = document.title;
+function markAuditSeen(maxId = notice.maxId) {
+  try { localStorage.setItem(SEEN, String(maxId)); } catch { /* egal */ }
+  notice.audit = 0; paintNotice();
+}
+function paintNotice() {
+  const c = app.querySelector('.ab-navcount[data-for="audit"]');
+  if (c) { c.textContent = notice.audit ? String(notice.audit) : ''; c.classList.toggle('hot', notice.audit > 0); }
+  document.title = notice.audit ? `(${notice.audit}) ${baseTitle}` : baseTitle;
+}
+async function checkNotices() {
+  if (!data || token === 'dev-preview') return;
+  const f = (data.activity?.failed_key_24h || 0) + (data.activity?.failed_admin_24h || 0);
+  if (notice.failed != null && f > notice.failed) toast(`⚠ ${f - notice.failed} neue fehlgeschlagene Anmeldeversuche (24 h: ${f}).`, true);
+  notice.failed = f;
+  try {
+    const rows = await adminAudit(token, 100);
+    if (!Array.isArray(rows)) return;
+    notice.maxId = Math.max(0, ...rows.map((r) => r.id));
+    let seen = 0;
+    try { seen = +localStorage.getItem(SEEN) || 0; } catch { /* egal */ }
+    if (!seen || tab === 'audit') return markAuditSeen();
+    const fresh = rows.filter((r) => r.id > seen && r.actor !== 'Admin');
+    if (fresh.length > notice.audit) toast(`Neue Aktivität: ${fresh[0].actor} – ${fresh[0].target || fresh[0].tbl}`);
+    notice.audit = fresh.length;
+    paintNotice();
+  } catch { /* nächster Takt */ }
+}
+
 // Live: Panel-Daten alle 30 s neu laden – nicht während Dialoge offen sind oder getippt wird
 let stopLive = null, quiet = false; // quiet: stilles Nachladen ohne Zähl-Animation
 function startLive() {
@@ -246,7 +278,9 @@ function startLive() {
     quiet = true;
     try { await reload(); } finally { quiet = false; }
     const c = app.querySelector('.ab-content'); if (c && y) c.scrollTop = y;
+    await checkNotices();
   });
+  checkNotices();
 }
 
 function renderShell() {
@@ -277,8 +311,8 @@ function renderTab(animate) {
   const content = app.querySelector('.ab-content');
   if (!content) return renderShell();
   app.querySelectorAll('.ab-navbtn').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-  const counts = { orgs: data.agencies.length, stations: data.stations.length, routes: data.routes.length, keys: data.keys.length };
-  app.querySelectorAll('.ab-navcount').forEach((c) => { const n = counts[c.dataset.for]; c.textContent = n != null ? String(n) : ''; });
+  const counts = { orgs: data.agencies.length, stations: data.stations.length, routes: data.routes.length, keys: data.keys.length, audit: notice.audit || null };
+  app.querySelectorAll('.ab-navcount').forEach((c) => { const n = counts[c.dataset.for]; c.textContent = n != null ? String(n) : ''; c.classList.toggle('hot', c.dataset.for === 'audit' && notice.audit > 0); });
   app.querySelector('.ab-title').textContent = TABS.find(([id]) => id === tab)[1];
   const view = { overview: viewOverview, orgs: viewOrgs, stations: viewStations, routes: viewRoutes, keys: viewKeys, visits: viewVisits, audit: viewAudit, general: viewGeneral }[tab]();
   if (animate && !reduced) view.classList.add('enter');
@@ -701,6 +735,7 @@ function viewAudit() {
   load.then((rows) => {
     if (rows == null) { setToken(null); startBoot(); return; }
     if (tab !== 'audit') return;
+    if (token !== 'dev-preview') markAuditSeen(Math.max(notice.maxId, ...rows.map((r) => r.id)));
     const v = tableView(rows, [
       { head: 'Zeit', text: (r) => fmtDate(r.ts), cls: 'mono', cell: (r) => el('span', { text: new Date(r.ts).toLocaleString('de-DE') }) },
       { head: 'Akteur', text: (r) => r.actor, cell: (r) => el('span', { class: 'ab-badge', 'data-s': r.actor === 'Admin' ? 'aktiv' : 'geplant', text: r.actor }) },

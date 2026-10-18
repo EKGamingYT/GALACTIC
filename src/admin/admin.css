@@ -340,3 +340,9 @@ a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: un
 .ab-audit-act { font-weight: 600; font-size: 12.5px; white-space: nowrap; }
 .ab-audit-act.insert { color: var(--ok); } .ab-audit-act.update { color: var(--warm); } .ab-audit-act.delete { color: var(--danger); }
 .ab-keydlg { max-height: 92vh; overflow-y: auto; }
+
+/* Benachrichtigung: neue Aktivität im Audit-Log */
+.ab-navcount.hot { min-width: 18px; padding: 1px 6px; border-radius: 999px; color: #04060d; font-weight: 700; text-align: center;
+  background: var(--warm); box-shadow: 0 0 12px rgba(255, 204, 85, 0.6); animation: ab-pulse 1.6s ease-in-out infinite; }
+@keyframes ab-pulse { 50% { box-shadow: 0 0 2px rgba(255, 204, 85, 0.2); } }
+@media (prefers-reduced-motion: reduce) { .ab-navcount.hot { animation: none; } }
