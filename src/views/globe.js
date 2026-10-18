@@ -21,6 +21,7 @@ import { createPlaces } from './map/places.js';
 import { createMapUI } from './map/ui.js';
 import { createPlanner } from './map/planner.js';
 import { createSitesLayer } from './map/sitesLayer.js';
+import { createSatLayer } from './map/satLayer.js';
 import { metersPerPixel, niceKm, toLatLon } from './map/geo.js';
 
 Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kacheln
@@ -310,6 +311,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       uiRoot.appendChild(sb);
     }
     disposers.push(() => { sitesLayer?.dispose(); sitesLayer = null; });
+    // Live-Satelliten (nur Erde): ISS, Tiangong, Hubble … per SGP4 aus aktuellen CelesTrak-Bahnelementen
+    let satLayer = isEarth ? createSatLayer({ viewer: v, ellipsoid, root: uiRoot }) : null;
+    disposers.push(() => { satLayer?.dispose(); satLayer = null; });
     handler.setInputAction((e) => {
       clearTimeout(clickTimer);
       const pos = { x: e.position.x, y: e.position.y };
@@ -320,6 +324,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       }
       clickTimer = setTimeout(() => {
         if (viewer !== v) return;
+        if (satLayer?.pickAt(pos)) return;
         if (sitesLayer?.pickAt(pos)) return; // realer Raumfahrt-Ort hat Vorrang vor IAU-Namen
         const f = namesReady && prefs.names ? names.fromPick(scene.pick(pos)) : null;
         if (f) {

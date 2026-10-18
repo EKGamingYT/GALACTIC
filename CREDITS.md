@@ -73,3 +73,7 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 - **NASA DONKI** (api.nasa.gov, CCMC) – koronale Massenauswürfe
 - Magnetopausen-Modell: Shue et al. (1998), JGR 103; Mondbahn: J. Meeus, *Astronomical Algorithms* Kap. 47
 - **Kolonie-Logistik:** NASA BVAD (NASA/TP-2015-218570/REV2), NASA ISS-Wasserrückgewinnung (2023), MOXIE (Hecht et al. 2021), NASA Fission Surface Power, NASA RPS/MMRTG, Mazarico et al. (2011, Icarus), NIST Chemistry WebBook, Kopp & Lean (2011), NASA Mars Fact Sheet – einzelne Energiekennwerte sind gekennzeichnete Modellannahmen
+
+## Live-Satelliten (Erdkarte)
+- **CelesTrak** (T. S. Kelso, celestrak.org) – aktuelle Bahnelemente (GP/TLE) für Raumstationen und ausgewählte Satelliten, über eigenen Proxy mit 2-h-Cache
+- **satellite.js** (MIT-Lizenz) – SGP4/SDP4-Bahnausbreitung

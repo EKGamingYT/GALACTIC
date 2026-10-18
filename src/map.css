@@ -192,3 +192,8 @@
 .pl-toggle:active, .sites-toggle:active { transform: scale(0.96); }
 .pl-panel, .site-pop { z-index: 9; }
 @media (max-width: 720px) { .pl-toggle, .sites-toggle { min-height: 44px; } }
+
+/* Live-Satelliten (Erde) – unter dem Orte-Knopf */
+.sat-toggle { top: 108px; } .sat-toggle.solo { top: 60px; }
+.sat-live { font-variant-numeric: tabular-nums; color: var(--text-2, #c3cde6); }
+@media (max-width: 720px) { .sat-toggle { top: auto; bottom: 166px; } .sat-toggle.solo { bottom: 118px; } }
