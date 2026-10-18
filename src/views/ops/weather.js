@@ -791,7 +791,9 @@ export function createWeatherPanel(container) {
         const end = new Date(); const start = new Date(Date.now() - 7 * 24 * H);
         const ymd = (d) => d.toISOString().slice(0, 10);
         try {
-          state.data.cme = await getJSON(`${DONKI_CME}?startDate=${ymd(start)}&endDate=${ymd(end)}&api_key=${DONKI_KEY}`, ctl.signal);
+          // zuerst der eigene Proxy (Schlüssel serverseitig, CDN-Cache für alle Besucher), im Dev-Server direkt
+          state.data.cme = await getJSON('/api/donki-cme', ctl.signal)
+            .catch((e) => { if (ctl.signal.aborted) throw e; return getJSON(`${DONKI_CME}?startDate=${ymd(start)}&endDate=${ymd(end)}&api_key=${DONKI_KEY}`, ctl.signal); });
           state.err.cme = null;
         } catch (e) { if (!ctl.signal.aborted) state.err.cme = e?.message || 'Fehler'; }
       }
