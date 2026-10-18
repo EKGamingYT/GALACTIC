@@ -36,8 +36,19 @@ export const adminOverview = (token) => rpc('admin_overview', { p_token: token }
 export const adminCreateAgency = (token, data) => rpc('admin_create_agency', { p_token: token, p: data });
 export const adminUpdateAgency = (token, id, data) => rpc('admin_update_agency', { p_token: token, p_id: id, p: data });
 export const adminDeleteAgency = (token, id) => rpc('admin_delete_agency', { p_token: token, p_id: id });
-export const adminIssueKey = (token, agencyId, label, maxStations = null, maxRoutes = null) =>
-  rpc('admin_issue_key', { p_token: token, p_agency: agencyId, p_label: label, p_max_stations: maxStations, p_max_routes: maxRoutes });
+export const adminIssueKey = (token, agencyId, label, maxStations = null, maxRoutes = null, perms = null, bodies = null) =>
+  rpc('admin_issue_key', { p_token: token, p_agency: agencyId, p_label: label, p_max_stations: maxStations, p_max_routes: maxRoutes,
+    p_perms: perms, p_bodies: bodies });
+// p: { label?, max_stations?, max_routes?, perms?: string[], bodies?: string[] (leer = alle Körper) }
+export const adminUpdateKey = (token, keyId, p) => rpc('admin_update_key', { p_token: token, p_key_id: keyId, p });
+export const adminAudit = (token, limit = 300) => rpc('admin_audit', { p_token: token, p_limit: limit });
+
+// Rechte eines Stationsschlüssels (RBAC) – serverseitig in station_save/route_save/… durchgesetzt
+export const KEY_PERMS = {
+  stations_create: 'Stationen anlegen', stations_edit: 'Stationen bearbeiten', stations_delete: 'Stationen löschen',
+  routes_create: 'Routen anlegen', routes_delete: 'Routen löschen',
+};
+export const KEY_BODIES = { moon: 'Mond', mars: 'Mars', mercury: 'Merkur', venus: 'Venus', earth: 'Erde' };
 export const adminKeyQuotas = (token) => rpc('admin_key_quotas', { p_token: token });
 export const adminSetKeyActive = (token, keyId, active) => rpc('admin_set_key_active', { p_token: token, p_key_id: keyId, p_active: active });
 export const adminDeleteStation = (token, id) => rpc('admin_delete_station', { p_token: token, p_id: id });

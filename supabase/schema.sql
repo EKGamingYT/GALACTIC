@@ -262,3 +262,10 @@ revoke all on private.agency_contacts from public, anon, authenticated;
 --   (max. 30/Sitzung/Stunde, Löschung nach 180 Tagen); Auswertung nur in admin_overview → 'visits'
 -- private.agency_apply(id, p jsonb): gemeinsamer Schreibpfad für admin_create_agency / admin_update_agency
 -- Referenzdaten: 36 reale Raumfahrtorganisationen (is_reference = true), nur öffentliche Stammdaten.
+
+-- ===== Migration rbac_and_audit (2026-10-18) =====
+-- private.station_keys: perms text[] (stations_create|stations_edit|stations_delete|routes_create|routes_delete), bodies text[] (null = alle)
+-- private.key_can(key_row, perm, body) – geprüft in station_save/station_delete/route_save/route_delete
+-- private.audit_log + Trigger private.audit_trg() auf stations, routes, agencies, site_settings, private.station_keys
+--   Akteur über set_config('galactic.actor') in private.is_admin / private.agency_for_key ('Admin' bzw. 'Schlüssel „…"')
+-- RPCs: admin_issue_key(+p_perms, p_bodies), admin_update_key(token, key_id, jsonb), admin_audit(token, limit)

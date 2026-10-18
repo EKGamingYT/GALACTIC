@@ -5,8 +5,9 @@
 import './admin.css';
 import {
   adminOverview, adminCreateAgency, adminUpdateAgency, adminDeleteAgency, adminIssueKey, adminSetKeyActive,
-  adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, adminDeleteKey, adminKeyQuotas, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
+  adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, adminDeleteKey, adminKeyQuotas, adminUpdateKey, adminAudit, KEY_PERMS, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
 } from '../lib/stationsApi.js';
+import { mappedBodies } from '../data/bodies.js';
 
 const STORE = 'galactic_admin_token';
 const BYPASS = 'galactic_admin_preview';
@@ -46,6 +47,7 @@ const ICON = {
   keys: ['M15 7a4 4 0 1 1-3.9 4.9L3 20v-3h3v-3h3l1.1-1.1A4 4 0 0 1 15 7z'],
   visits: ['M3 3v18h18', 'M7 15l4-5 4 3 5-7'],
   general: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'],
+  audit: ['M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z', 'M9 12l2 2 4-4'],
   refresh: ['M21 12a9 9 0 1 1-2.6-6.4', 'M21 3v6h-6'],
   logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'M16 17l5-5-5-5', 'M21 12H9'],
   plus: ['M12 5v14M5 12h14'],
@@ -226,9 +228,9 @@ function logoMark() {
 // =====================================================================================================
 const TABS = [
   ['overview', 'Übersicht'], ['orgs', 'Organisationen'], ['stations', 'Stationen'], ['routes', 'Routen'],
-  ['keys', 'Schlüssel'], ['visits', 'Besucher'], ['general', 'Allgemein'],
+  ['keys', 'Schlüssel'], ['visits', 'Besucher'], ['audit', 'Audit-Log'], ['general', 'Allgemein'],
 ];
-const ICON_FOR = { overview: 'overview', orgs: 'orgs', stations: 'stations', routes: 'routes', keys: 'keys', visits: 'visits', general: 'general' };
+const ICON_FOR = { overview: 'overview', orgs: 'orgs', stations: 'stations', routes: 'routes', keys: 'keys', visits: 'visits', audit: 'audit', general: 'general' };
 
 function renderShell() {
   const nav = el('nav', { class: 'ab-nav', 'aria-label': 'Bereiche' });
@@ -260,7 +262,7 @@ function renderTab(animate) {
   const counts = { orgs: data.agencies.length, stations: data.stations.length, routes: data.routes.length, keys: data.keys.length };
   app.querySelectorAll('.ab-navcount').forEach((c) => { const n = counts[c.dataset.for]; c.textContent = n != null ? String(n) : ''; });
   app.querySelector('.ab-title').textContent = TABS.find(([id]) => id === tab)[1];
-  const view = { overview: viewOverview, orgs: viewOrgs, stations: viewStations, routes: viewRoutes, keys: viewKeys, visits: viewVisits, general: viewGeneral }[tab]();
+  const view = { overview: viewOverview, orgs: viewOrgs, stations: viewStations, routes: viewRoutes, keys: viewKeys, visits: viewVisits, audit: viewAudit, general: viewGeneral }[tab]();
   if (animate && !reduced) view.classList.add('enter');
   content.replaceChildren(view);
 }
@@ -463,21 +465,79 @@ function quotaControl(label, icon) {
   sync(10);
   return { el: wrap, value: () => (inf ? null : Math.max(1, +num.value || 1)) };
 }
+// Rechte + erlaubte Himmelskörper eines Schlüssels (serverseitig in station_save/route_save/… durchgesetzt)
+const BODY_NAMES = Object.fromEntries(mappedBodies().map((b) => [b.id, b.name]));
+const ROLE_PRESETS = {
+  'Vollzugriff': Object.keys(KEY_PERMS),
+  'Planer (ohne Löschen)': ['stations_create', 'stations_edit', 'routes_create'],
+  'Nur Routen': ['routes_create', 'routes_delete'],
+  'Nur Lesen': [],
+};
+function scopeControl(perms = Object.keys(KEY_PERMS), bodies = null) {
+  const pBoxes = Object.entries(KEY_PERMS).map(([id, label]) => {
+    const box = el('input', { type: 'checkbox', checked: perms.includes(id), value: id });
+    return { id, box, node: el('label', { class: 'ab-chip' }, box, el('span', { text: label })) };
+  });
+  const bBoxes = Object.entries(BODY_NAMES).map(([id, label]) => {
+    const box = el('input', { type: 'checkbox', checked: !bodies || bodies.includes(id), value: id });
+    return { id, box, node: el('label', { class: 'ab-chip' }, box, el('span', { text: label })) };
+  });
+  const presets = el('div', { class: 'ab-row wrap' }, Object.entries(ROLE_PRESETS).map(([name, list]) =>
+    btn(name, { kind: 'ghost', small: true, onclick: () => pBoxes.forEach((p) => { p.box.checked = list.includes(p.id); }) })));
+  const wrap = el('div', { class: 'ab-scope' },
+    el('div', { class: 'ab-q-head' }, svg(ICON.audit, 16), el('span', { text: 'Rechte (Rolle)' })), presets,
+    el('div', { class: 'ab-chips' }, pBoxes.map((p) => p.node)),
+    el('div', { class: 'ab-q-head' }, svg(ICON.orgs, 16), el('span', { text: 'Erlaubte Himmelskörper' })),
+    el('div', { class: 'ab-chips' }, bBoxes.map((b) => b.node)));
+  return {
+    el: wrap,
+    perms: () => pBoxes.filter((p) => p.box.checked).map((p) => p.id),
+    // alle angehakt = keine Einschränkung (null), damit künftige Körper automatisch erlaubt sind
+    bodies: () => { const on = bBoxes.filter((b) => b.box.checked).map((b) => b.id); return on.length === bBoxes.length ? null : on; },
+  };
+}
+const permSummary = (k) => {
+  const p = k.perms ?? Object.keys(KEY_PERMS);
+  const role = Object.entries(ROLE_PRESETS).find(([, l]) => l.length === p.length && l.every((x) => p.includes(x)))?.[0];
+  return `${role || `${p.length} Rechte`} · ${k.bodies?.length ? k.bodies.map((b) => BODY_NAMES[b] || b).join(', ') : 'alle Körper'}`;
+};
+function editKey(k) {
+  const label = el('input', { type: 'text', maxlength: '120', value: k.label || '' });
+  const sc = scopeControl(k.perms ?? Object.keys(KEY_PERMS), k.bodies);
+  const close = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 180); };
+  const submit = btn('Speichern', { type: 'submit', icon: 'audit' });
+  const form = el('form', { class: 'ab-dialog ab-keydlg', onsubmit: async (e) => {
+    e.preventDefault();
+    const bodies = sc.bodies();
+    if (bodies && !bodies.length) return toast('Mindestens einen Himmelskörper wählen.', true);
+    const ok = await act(submit, () => adminUpdateKey(token, k.id, { label: label.value.trim(), perms: sc.perms(), bodies: bodies ?? [] }), 'Rechte gespeichert.');
+    if (ok) close();
+  } },
+    el('div', { class: 'ab-keydlg-head' }, el('div', { class: 'ab-keyicon' }, svg(ICON.audit, 26)),
+      el('div', {}, el('h3', { text: 'Schlüssel-Rechte' }), el('p', { text: `für ${orgName(k.agency_id)}` }))),
+    el('label', { class: 'ab-field' }, el('span', { text: 'Bezeichnung' }), label),
+    sc.el,
+    el('div', { class: 'ab-row end' }, btn('Abbrechen', { kind: 'ghost', onclick: close }), submit));
+  const ov = el('div', { class: 'ab-modal', onclick: (e) => { if (e.target === ov) close(); } }, form);
+  document.body.append(ov);
+}
 async function issueKey(a, button) {
   const label = el('input', { type: 'text', maxlength: '120', placeholder: 'z. B. Missionsplanung 2027' });
-  const qs = quotaControl('Stationen', 'stations'), qr = quotaControl('Routen', 'routes');
+  const qs = quotaControl('Stationen', 'stations'), qr = quotaControl('Routen', 'routes'), sc = scopeControl();
   const close = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 180); };
   const submit = btn('Schlüssel erzeugen', { type: 'submit', icon: 'key' });
   const form = el('form', { class: 'ab-dialog ab-keydlg', onsubmit: async (e) => {
     e.preventDefault();
-    const key = await act(submit, () => adminIssueKey(token, a.id, label.value.trim() || null, qs.value(), qr.value()));
+    const bodies = sc.bodies();
+    if (bodies && !bodies.length) return toast('Mindestens einen Himmelskörper wählen.', true);
+    const key = await act(submit, () => adminIssueKey(token, a.id, label.value.trim() || null, qs.value(), qr.value(), sc.perms(), bodies));
     if (key) { close(); showKeyOnce(a.name, key, qs.value(), qr.value()); }
   } },
     el('div', { class: 'ab-keydlg-head' }, el('div', { class: 'ab-keyicon' }, svg(ICON.key, 26)),
       el('div', {}, el('h3', { text: 'Neuer Stationsschlüssel' }), el('p', { text: `für ${a.name}` }))),
     el('label', { class: 'ab-field' }, el('span', { text: 'Bezeichnung (optional)' }), label),
     el('p', { class: 'ab-hint', text: 'Kontingent: wie viele Stationen und Routen mit diesem Schlüssel neu angelegt werden dürfen. Eine Organisation kann beliebig viele Schlüssel haben.' }),
-    qs.el, qr.el,
+    qs.el, qr.el, sc.el,
     el('div', { class: 'ab-row end' }, btn('Abbrechen', { kind: 'ghost', onclick: close }), submit));
   const ov = el('div', { class: 'ab-modal', onclick: (e) => { if (e.target === ov) close(); } }, form);
   document.body.append(ov);
@@ -592,8 +652,10 @@ function viewKeys() {
     { head: 'Status', text: (k) => (k.active ? 'aktiv' : 'gesperrt'), cell: (k) => statusBadge(k.active ? 'aktiv' : 'gesperrt') },
     { head: 'Kontingent', text: (k) => '', cell: (k) => el('div', { class: 'ab-qcell' },
       quotaBar('Stationen', k.used_stations ?? 0, k.max_stations), quotaBar('Routen', k.used_routes ?? 0, k.max_routes)) },
+    { head: 'Rechte', text: (k) => permSummary(k), cell: (k) => el('small', { class: 'ab-perm', text: permSummary(k) }) },
     { head: 'Erstellt', text: (k) => fmtDate(k.created_at) }, { head: 'Zuletzt benutzt', text: (k) => fmtDate(k.last_used_at) },
     { head: '', text: () => '', cell: (k) => el('div', { class: 'ab-row nowrap' },
+      btn('', { kind: 'ghost', small: true, icon: 'audit', title: 'Rechte bearbeiten', onclick: () => editKey(k) }),
       btn(k.active ? 'Sperren' : 'Entsperren', { kind: 'ghost', small: true, icon: k.active ? 'x' : 'key',
         onclick: (e) => act(e.currentTarget, () => adminSetKeyActive(token, k.id, !k.active), k.active ? 'Schlüssel gesperrt.' : 'Schlüssel entsperrt.') }),
       btn('', { kind: 'ghost danger', small: true, icon: 'trash', title: 'Schlüssel löschen', onclick: async (e) => {
@@ -601,6 +663,39 @@ function viewKeys() {
         if (await confirmBox('Schlüssel löschen?', `„${k.label || 'ohne Bezeichnung'}" von ${orgName(k.agency_id)} endgültig löschen? Die Organisation kann damit sofort keine Stationen mehr anlegen oder ändern.`)) act(b, () => adminDeleteKey(token, k.id), 'Schlüssel gelöscht.');
       } })) },
   ], 'Noch keine Schlüssel ausgegeben – über „Organisationen → Schlüssel ausgeben".', 'keySearch', 'Bezeichnung oder Organisation …');
+}
+
+// --- Audit-Log ------------------------------------------------------------------------------------------
+const AUDIT_TBL = { stations: 'Station', routes: 'Route', agencies: 'Organisation', site_settings: 'Einstellung', station_keys: 'Schlüssel' };
+const AUDIT_ACT = { INSERT: 'angelegt', UPDATE: 'geändert', DELETE: 'gelöscht' };
+const auditVal = (v) => (v == null ? '–' : typeof v === 'object' ? JSON.stringify(v).slice(0, 80) : String(v).slice(0, 80));
+function auditDetails(r) {
+  const d = r.details || {};
+  if (r.action === 'UPDATE') return Object.entries(d).map(([k, v]) => `${k}: ${auditVal(v?.alt)} → ${auditVal(v?.neu)}`).join(' · ');
+  if (r.action === 'INSERT') return ['body', 'kind', 'status', 'max_stations', 'max_routes', 'perms', 'bodies']
+    .filter((k) => k in d).map((k) => `${k}: ${auditVal(d[k])}`).join(' · ');
+  return '';
+}
+function viewAudit() {
+  ui.auditSearch ??= '';
+  const box = el('div', { class: 'ab-view' }, el('div', { class: 'ab-card' }, el('p', { class: 'ab-hint', text: 'Lade Audit-Log …' })));
+  const load = token === 'dev-preview' ? Promise.resolve(data.audit || []) : adminAudit(token, 500);
+  load.then((rows) => {
+    if (rows == null) { setToken(null); startBoot(); return; }
+    if (tab !== 'audit') return;
+    const v = tableView(rows, [
+      { head: 'Zeit', text: (r) => fmtDate(r.ts), cls: 'mono', cell: (r) => el('span', { text: new Date(r.ts).toLocaleString('de-DE') }) },
+      { head: 'Akteur', text: (r) => r.actor, cell: (r) => el('span', { class: 'ab-badge', 'data-s': r.actor === 'Admin' ? 'aktiv' : 'geplant', text: r.actor }) },
+      { head: 'Organisation', text: (r) => r.agency || '–' },
+      { head: 'Aktion', text: (r) => `${AUDIT_TBL[r.tbl] || r.tbl} ${AUDIT_ACT[r.action] || r.action}`,
+        cell: (r) => el('span', { class: `ab-audit-act ${r.action.toLowerCase()}`, text: `${AUDIT_TBL[r.tbl] || r.tbl} ${AUDIT_ACT[r.action] || r.action}` }) },
+      { head: 'Objekt', text: (r) => r.target || '–', cell: (r) => el('strong', { text: r.target || '–' }) },
+      { head: 'Details', text: (r) => auditDetails(r), cell: (r) => el('small', { class: 'ab-perm', text: auditDetails(r) }) },
+    ], 'Noch keine Einträge. Ab jetzt wird jede Änderung an Organisationen, Schlüsseln, Stationen, Routen und Einstellungen protokolliert.',
+    'auditSearch', 'Akteur, Organisation, Objekt …');
+    box.replaceWith(v);
+  }).catch((e) => { box.firstChild.replaceChildren(el('p', { class: 'ab-hint', text: e.message || 'Fehler' })); });
+  return box;
 }
 
 // --- Besucher -------------------------------------------------------------------------------------------

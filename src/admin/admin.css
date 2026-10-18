@@ -327,3 +327,16 @@ a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: un
 .ab-qbar b { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); animation: ab-growx 0.6s var(--ease) both; transform-origin: left; }
 .ab-qbar.inf b { background: repeating-linear-gradient(90deg, rgba(110, 168, 255, 0.5) 0 6px, transparent 6px 10px); }
 .ab-qbar.full b { background: var(--danger); }
+
+/* RBAC: Rechte-Auswahl & Audit-Log */
+.ab-scope { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #ffffff05; }
+.ab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ab-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; font-size: 12.5px; user-select: none; transition: background .15s, border-color .15s; }
+.ab-chip input { accent-color: var(--accent); margin: 0; width: 14px; height: 14px; min-height: 0; padding: 0; flex: none; }
+.ab-chip span { white-space: nowrap; }
+.ab-chip:has(input:checked) { background: var(--accent-soft); border-color: var(--line-strong); }
+.ab-row.wrap { flex-wrap: wrap; gap: 6px; }
+.ab-perm { opacity: .8; display: block; max-width: 340px; white-space: normal; line-height: 1.35; }
+.ab-audit-act { font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.ab-audit-act.insert { color: var(--ok); } .ab-audit-act.update { color: var(--warm); } .ab-audit-act.delete { color: var(--danger); }
+.ab-keydlg { max-height: 92vh; overflow-y: auto; }
