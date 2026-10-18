@@ -1,4 +1,4 @@
-// Mission Control: Deep Space Network & Lichtlaufzeit · Weltraumwetter · Kolonie-Logistik (ISRU).
+// Mission Control: Deep Space Network & Lichtlaufzeit · Weltraumwetter · Kolonie-Logistik (ISRU) · Missions-Zeitleiste.
 // Die Unterseiten werden erst beim ersten Öffnen geladen (dynamischer Import) – Route #/ops/<tab>.
 import './ops.css';
 
@@ -6,6 +6,7 @@ const TABS = [
   { id: 'dsn', label: 'Deep Space Network', load: () => import('./dsn.js').then((m) => m.createDsnPanel) },
   { id: 'weather', label: 'Weltraumwetter', load: () => import('./weather.js').then((m) => m.createWeatherPanel) },
   { id: 'isru', label: 'Kolonie-Logistik', load: () => import('./isru.js').then((m) => m.createIsruPanel) },
+  { id: 'timeline', label: 'Missions-Zeitleiste', load: () => import('./timeline.js').then((m) => m.createTimelinePanel) },
 ];
 
 export function createOpsView(container) {

@@ -591,6 +591,18 @@ function route() {
     if (view === 'ops') $('#status').textContent = 'Mission Control';
   }
 }
+// Sprung aus anderen Modulen (z. B. Missions-Zeitleiste): Datum setzen, ins Sonnensystem wechseln, Körper fokussieren
+window.addEventListener('galactic:goto', (e) => {
+  const { date, body } = e.detail || {};
+  const t = Date.parse(date);
+  if (Number.isFinite(t)) {
+    const pad = 60 * 86400000;
+    clock.set({ mode: 'timelapse', playing: false, time: t, start: Math.min(clock.state.start, t - pad), end: Math.max(clock.state.end, t + pad) });
+  }
+  location.hash = '#/system';
+  const b = typeof body === 'string' && (bodyById(body) ?? MOON_BODIES.find((x) => x.id === body || x.id === `moon-${body}`) ?? SMALL_BODIES.find((x) => x.id === body));
+  if (b) setTimeout(() => { selectBody(b); system.focus(b.id); }, 350);
+});
 window.addEventListener('hashchange', route);
 if (!location.hash) location.hash = '#/system';
 route();

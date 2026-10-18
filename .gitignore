@@ -6,3 +6,4 @@ dist/
 # lokale Zugangsdaten – nie committen
 docs/EINRICHTUNG-ZUGANG.md
 .env*
+scripts/i18n-strings.json

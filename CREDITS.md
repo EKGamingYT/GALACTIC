@@ -77,3 +77,4 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 ## Live-Satelliten (Erdkarte)
 - **CelesTrak** (T. S. Kelso, celestrak.org) – aktuelle Bahnelemente (GP/TLE) für Raumstationen und ausgewählte Satelliten, über eigenen Proxy mit 2-h-Cache
 - **satellite.js** (MIT-Lizenz) – SGP4/SDP4-Bahnausbreitung
+- **Missions-Zeitleiste:** NASA NSSDCA Master Catalog (nssdc.gsfc.nasa.gov/nmc), Agentur-Seiten und englischsprachige Wikipedia (CC BY-SA 4.0, nur Fakten/Daten übernommen); Quelle je Ereignis verlinkt
