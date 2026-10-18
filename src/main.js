@@ -18,14 +18,30 @@ import { heliocentricPosition } from './lib/orbits.js';
 import { TEXTURES } from './data/textures.js';
 import { createClock } from './lib/time.js';
 import { createSystemView } from './views/system.js';
-import { createGlobeView } from './views/globe.js';
-import { createSkyView } from './views/sky.js';
-import { createEngineerView } from './views/engineer.js';
 import { createOpsView } from './views/ops/ops.js';
 import { createTimebar } from './ui/timebar.js';
 import { placeName, nearbyArticles } from './lib/lexicon.js';
 
 const $ = (sel) => document.querySelector(sel);
+
+// Schwere Ansichten (Cesium-Globus, Himmel, Ingenieurstool) erst beim ersten Öffnen laden: Aufrufe davor werden
+// gepuffert und nach dem Laden nachgeholt; setActive(false) löst kein Laden aus.
+function lazyView(load, ...args) {
+  let api = null, pending = null;
+  const queue = [];
+  const boot = () => (pending ??= load().then((create) => {
+    api = create(...args);
+    for (const [m, a] of queue.splice(0)) api[m]?.(...a);
+    return api;
+  }).catch((e) => { pending = null; console.error('Ansicht konnte nicht geladen werden', e); }));
+  return new Proxy({}, {
+    get: (_, m) => (...a) => {
+      if (api) return api[m]?.(...a);
+      if (m === 'setActive' && !a[0]) return undefined;
+      queue.push([m, a]); boot(); return undefined;
+    },
+  });
+}
 const panel = $('#panel');
 const AU_KM = 149597870.7;
 
@@ -365,7 +381,7 @@ const layerBar = document.createElement('div');
 layerBar.className = 'layer-bar';
 const mapStatus = document.createElement('div');
 mapStatus.className = 'map-status';
-const globe = createGlobeView($('#view-body'), {
+const globe = lazyView(() => import('./views/globe.js').then((m) => m.createGlobeView), $('#view-body'), {
   onPick: pickPoint,
   onStatus: (text) => { mapStatus.textContent = text; mapStatus.hidden = !text; },
   // Ebenen-Umschalter der aktuellen Karte (z. B. Farbe / Relief / Infrarot)
@@ -375,8 +391,8 @@ const globe = createGlobeView($('#view-body'), {
     layerBar.querySelectorAll('button').forEach((b) => (b.onclick = () => globe.setLayer(Number(b.dataset.i))));
   },
 });
-const sky = createSkyView($('#view-sky'));
-const engineer = createEngineerView($('#view-engineer'));
+const sky = lazyView(() => import('./views/sky.js').then((m) => m.createSkyView), $('#view-sky'));
+const engineer = lazyView(() => import('./views/engineer.js').then((m) => m.createEngineerView), $('#view-engineer'));
 const ops = createOpsView($('#view-ops'));
 
 createTimebar($('#view-system'), clock);
