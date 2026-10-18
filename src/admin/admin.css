@@ -289,3 +289,41 @@ a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: un
   background: linear-gradient(135deg, rgba(110, 168, 255, 0.25), rgba(185, 140, 255, 0.25)); font: 700 15px var(--font-display); }
 .ab-logo-prev img { width: 100%; height: 100%; object-fit: contain; }
 .ab-file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+/* --- Schlüssel-Dialog, Kontingente ------------------------------------------------------------------ */
+.ab-keydlg { width: min(520px, 100%); }
+.ab-keydlg-head { display: flex; gap: 14px; align-items: center; }
+.ab-keydlg-head p { margin: 2px 0 0; color: var(--muted); }
+.ab-keyicon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px; color: #04060d;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 0 24px rgba(150, 140, 255, 0.45); animation: ab-pop 0.4s var(--ease) both; }
+.ab-quota { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255, 255, 255, 0.025); transition: border-color 0.2s, background 0.2s; }
+.ab-quota:not(.inf) { border-color: rgba(110, 168, 255, 0.4); background: rgba(110, 168, 255, 0.05); }
+.ab-q-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text-2); }
+.ab-q-head span { flex: 1; font-weight: 600; }
+.ab-q-val { min-width: 54px; padding: 2px 10px; text-align: center; font: 700 18px var(--font-display); color: #fff; background: var(--accent-soft); border-radius: 999px; transition: transform 0.15s; }
+.ab-q-row { display: flex; gap: 10px; align-items: center; transition: opacity 0.2s; }
+.ab-quota.inf .ab-q-row { opacity: 0.35; }
+.ab-q-row input[type=range] { flex: 1; height: 6px; -webkit-appearance: none; appearance: none; border-radius: 3px; cursor: pointer;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)) 0 / var(--p, 10%) 100% no-repeat, rgba(255, 255, 255, 0.1); }
+.ab-q-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(110, 168, 255, 0.35); }
+.ab-q-row input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(110, 168, 255, 0.35); }
+.ab-q-row input[type=number] { width: 86px; padding: 7px 9px; color: #fff; background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
+.ab-q-inf { position: relative; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--text-2); cursor: pointer; }
+.ab-q-inf input { position: absolute; opacity: 0; }
+.ab-q-inf i { position: relative; width: 36px; height: 20px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--line); transition: background 0.2s; }
+.ab-q-inf i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 0.2s var(--ease); }
+.ab-q-inf input:checked + i { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.ab-q-inf input:checked + i::after { transform: translateX(16px); }
+.ab-keyforge { position: relative; display: grid; place-items: center; width: 74px; height: 74px; margin: 0 auto 4px; color: #fff; }
+.ab-keyforge svg { position: relative; z-index: 1; filter: drop-shadow(0 0 10px rgba(185, 140, 255, 0.9)); animation: ab-pop 0.5s var(--ease) both; }
+.ab-keyforge i { position: absolute; inset: 0; border: 2px solid rgba(110, 168, 255, 0.6); border-radius: 50%; animation: ab-ring 1.6s ease-out infinite; }
+.ab-keyforge i:nth-child(2) { animation-delay: 0.5s; } .ab-keyforge i:nth-child(3) { animation-delay: 1s; }
+@keyframes ab-ring { from { transform: scale(0.4); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+.ab-keyval.scramble { color: #9fc4ff; border-style: solid; }
+.ab-hidden { visibility: hidden; }
+.ab-qcell { display: flex; flex-direction: column; gap: 5px; min-width: 150px; }
+.ab-qbar span { font-size: 11px; color: var(--muted); }
+.ab-qbar i { display: block; height: 5px; margin-top: 2px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.ab-qbar b { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); animation: ab-growx 0.6s var(--ease) both; transform-origin: left; }
+.ab-qbar.inf b { background: repeating-linear-gradient(90deg, rgba(110, 168, 255, 0.5) 0 6px, transparent 6px 10px); }
+.ab-qbar.full b { background: var(--danger); }

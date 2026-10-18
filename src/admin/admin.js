@@ -5,7 +5,7 @@
 import './admin.css';
 import {
   adminOverview, adminCreateAgency, adminUpdateAgency, adminDeleteAgency, adminIssueKey, adminSetKeyActive,
-  adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, adminDeleteKey, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
+  adminDeleteStation, adminDeleteRoute, adminSetSetting, getSettings, adminDeleteKey, adminKeyQuotas, AGENCY_FIELDS, STATION_KINDS, ROUTE_KINDS, AGENCY_CATEGORIES,
 } from '../lib/stationsApi.js';
 
 const STORE = 'galactic_admin_token';
@@ -103,8 +103,12 @@ async function act(button, fn, okMsg) {
   } catch (e) { toast(e.message || 'Fehler', true); return undefined; }
   finally { button?.classList.remove('busy'); if (button) button.disabled = false; }
 }
+async function withQuotas(res) {
+  if (res && token !== 'dev-preview') { try { const q = await adminKeyQuotas(token); for (const k of res.keys) Object.assign(k, q?.[k.id] || {}); } catch { /* optional */ } }
+  return res;
+}
 async function reload() {
-  const res = await adminOverview(token);
+  const res = await withQuotas(await adminOverview(token));
   if (res == null) { setToken(null); startBoot(); return false; }
   data = res;
   renderTab(false);
@@ -163,7 +167,7 @@ async function authenticateAndOpen(line, progress, term) {
   if (res === undefined) { auth.done('FEHLER', 'bad'); return; }
   if (res === null) { auth.done('ABGELEHNT', 'bad'); setToken(null); await sleep(300); return showLogin(term, 'Token ungültig, gesperrt oder zu viele Fehlversuche.'); }
   auth.done('berechtigt');
-  data = res;
+  data = await withQuotas(res);
   try { localStorage.setItem('galactic_is_admin', '1'); } catch { /* egal */ }
   progress(0.6);
   (await line(`Organisationen geladen (${data.agencies.length})`, { delay: 140 })).done('OK');
@@ -442,11 +446,42 @@ function openOrgDrawer(agency) {
   setTimeout(() => inputs.name.focus(), 50);
 }
 
+// Schlüssel ausgeben: Bezeichnung + Kontingent (Regler, ∞ = unbegrenzt), danach animierte Erzeugung
+function quotaControl(label, icon) {
+  let inf = true;
+  const val = el('b', { class: 'ab-q-val', text: '∞' });
+  const range = el('input', { type: 'range', min: '1', max: '100', value: '10', disabled: true, 'aria-label': label });
+  const num = el('input', { type: 'number', min: '1', max: '100000', value: '10', disabled: true, 'aria-label': `${label} (Zahl)` });
+  const sync = (v) => { range.value = String(Math.min(100, v)); num.value = String(v); val.textContent = inf ? '∞' : String(v); range.style.setProperty('--p', `${(Math.min(100, v) / 100) * 100}%`); };
+  range.addEventListener('input', () => sync(+range.value));
+  num.addEventListener('input', () => sync(Math.max(1, +num.value || 1)));
+  const infBox = el('input', { type: 'checkbox', checked: true, onchange: (e) => { inf = e.target.checked; range.disabled = num.disabled = inf; wrap.classList.toggle('inf', inf); sync(+num.value || 10); } });
+  const wrap = el('div', { class: 'ab-quota inf' },
+    el('div', { class: 'ab-q-head' }, svg(ICON[icon], 16), el('span', { text: label }), val),
+    el('div', { class: 'ab-q-row' }, range, num),
+    el('label', { class: 'ab-q-inf' }, infBox, el('i'), el('span', { text: 'Unbegrenzt (∞)' })));
+  sync(10);
+  return { el: wrap, value: () => (inf ? null : Math.max(1, +num.value || 1)) };
+}
 async function issueKey(a, button) {
-  const label = await promptBox('Neuer Stationsschlüssel', `Bezeichnung für den Schlüssel von „${a.name}" (optional, z. B. „Missionsplanung 2027"):`);
-  if (label === null) return;
-  const key = await act(button, () => adminIssueKey(token, a.id, label || null));
-  if (key) showKeyOnce(a.name, key);
+  const label = el('input', { type: 'text', maxlength: '120', placeholder: 'z. B. Missionsplanung 2027' });
+  const qs = quotaControl('Stationen', 'stations'), qr = quotaControl('Routen', 'routes');
+  const close = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 180); };
+  const submit = btn('Schlüssel erzeugen', { type: 'submit', icon: 'key' });
+  const form = el('form', { class: 'ab-dialog ab-keydlg', onsubmit: async (e) => {
+    e.preventDefault();
+    const key = await act(submit, () => adminIssueKey(token, a.id, label.value.trim() || null, qs.value(), qr.value()));
+    if (key) { close(); showKeyOnce(a.name, key, qs.value(), qr.value()); }
+  } },
+    el('div', { class: 'ab-keydlg-head' }, el('div', { class: 'ab-keyicon' }, svg(ICON.key, 26)),
+      el('div', {}, el('h3', { text: 'Neuer Stationsschlüssel' }), el('p', { text: `für ${a.name}` }))),
+    el('label', { class: 'ab-field' }, el('span', { text: 'Bezeichnung (optional)' }), label),
+    el('p', { class: 'ab-hint', text: 'Kontingent: wie viele Stationen und Routen mit diesem Schlüssel neu angelegt werden dürfen. Eine Organisation kann beliebig viele Schlüssel haben.' }),
+    qs.el, qr.el,
+    el('div', { class: 'ab-row end' }, btn('Abbrechen', { kind: 'ghost', onclick: close }), submit));
+  const ov = el('div', { class: 'ab-modal', onclick: (e) => { if (e.target === ov) close(); } }, form);
+  document.body.append(ov);
+  label.focus();
 }
 // Bild verkleinern (max. 256 px) und als data-URL liefern; SVG bleibt Vektor (wird nur per <img> gezeigt)
 async function imageToDataUrl(f) {
@@ -476,17 +511,28 @@ function promptBox(title, text) {
     input.focus();
   });
 }
-function showKeyOnce(agencyName, key) {
+function showKeyOnce(agencyName, key, maxS = null, maxR = null) {
   const ov = el('div', { class: 'ab-modal' });
   const close = () => { ov.classList.add('out'); setTimeout(() => ov.remove(), 180); };
+  const code = el('code', { class: 'ab-keyval scramble' });
+  const actions = el('div', { class: 'ab-row end ab-hidden' },
+    btn('Kopieren', { kind: 'ghost', onclick: async () => { try { await navigator.clipboard.writeText(key); toast('In die Zwischenablage kopiert.'); } catch { toast('Bitte manuell markieren.', true); } } }),
+    btn('Fertig', { onclick: close }));
   ov.append(el('div', { class: 'ab-dialog keyout' },
+    el('div', { class: 'ab-keyforge' }, el('i'), el('i'), el('i'), svg(ICON.key, 30)),
     el('h3', { text: 'Stationsschlüssel ausgegeben' }),
-    el('p', { text: `Für ${agencyName}. Jetzt kopieren und sicher übermitteln – er wird nur dieses eine Mal angezeigt.` }),
-    el('code', { class: 'ab-keyval', text: key }),
-    el('div', { class: 'ab-row end' },
-      btn('Kopieren', { kind: 'ghost', onclick: async () => { try { await navigator.clipboard.writeText(key); toast('In die Zwischenablage kopiert.'); } catch { toast('Bitte manuell markieren.', true); } } }),
-      btn('Fertig', { onclick: close }))));
+    el('p', { text: `Für ${agencyName} · Stationen ${maxS ?? '∞'} · Routen ${maxR ?? '∞'}. Jetzt kopieren und sicher übermitteln – er wird nur dieses eine Mal angezeigt.` }),
+    code, actions));
   document.body.append(ov);
+  // „Entschlüsselungs"-Animation: Zeichen rasten nacheinander ein
+  const chars = '0123456789abcdef';
+  let i = 4;
+  const tick = () => {
+    code.textContent = key.slice(0, i) + [...key.slice(i)].map(() => chars[Math.floor(Math.random() * 16)]).join('');
+    if (i < key.length) { i += reduced ? key.length : 1; setTimeout(tick, 22); }
+    else { code.textContent = key; code.classList.remove('scramble'); actions.classList.remove('ab-hidden'); }
+  };
+  tick();
 }
 
 // --- Stationen, Routen, Schlüssel ----------------------------------------------------------------------
@@ -533,12 +579,19 @@ function viewRoutes() {
     { head: '', text: () => '', cell: (r) => delBtn('Route', r.name, () => adminDeleteRoute(token, r.id)) },
   ], 'Noch keine Routen angelegt.', 'routeSearch', 'Route, Station oder Organisation …');
 }
+function quotaBar(label, used, max) {
+  const pct = max == null ? 0 : Math.min(100, (used / Math.max(max, 1)) * 100);
+  return el('div', { class: `ab-qbar${max == null ? ' inf' : pct >= 100 ? ' full' : ''}`, title: `${label}: ${used} von ${max ?? '∞'}` },
+    el('span', { text: `${label} ${used}/${max ?? '∞'}` }), el('i', {}, el('b', { style: { width: `${max == null ? 100 : pct}%` } })));
+}
 function viewKeys() {
   ui.keySearch ??= '';
   return tableView(data.keys, [
     { head: 'Bezeichnung', text: (k) => k.label || '(ohne Bezeichnung)', cell: (k) => el('strong', { text: k.label || '(ohne Bezeichnung)' }) },
     { head: 'Organisation', text: (k) => orgName(k.agency_id) },
     { head: 'Status', text: (k) => (k.active ? 'aktiv' : 'gesperrt'), cell: (k) => statusBadge(k.active ? 'aktiv' : 'gesperrt') },
+    { head: 'Kontingent', text: (k) => '', cell: (k) => el('div', { class: 'ab-qcell' },
+      quotaBar('Stationen', k.used_stations ?? 0, k.max_stations), quotaBar('Routen', k.used_routes ?? 0, k.max_routes)) },
     { head: 'Erstellt', text: (k) => fmtDate(k.created_at) }, { head: 'Zuletzt benutzt', text: (k) => fmtDate(k.last_used_at) },
     { head: '', text: () => '', cell: (k) => el('div', { class: 'ab-row nowrap' },
       btn(k.active ? 'Sperren' : 'Entsperren', { kind: 'ghost', small: true, icon: k.active ? 'x' : 'key',
