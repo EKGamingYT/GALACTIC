@@ -5,6 +5,7 @@
 //    (Art, Status, Radius, Besatzung, Beschreibung), eigene Stationen bearbeiten/löschen, Routen zeichnen
 // Alle Texte aus der Datenbank werden nur über textContent ausgegeben (kein innerHTML mit Fremddaten).
 import { every } from '../../lib/live.js';
+import { getScales, surfaceRadiationNotice } from '../../lib/spaceWeather.js';
 import {
   Cartesian3, Cartographic, Color, HeightReference, LabelStyle, VerticalOrigin, Math as CesiumMath, ConstantProperty,
   sampleTerrainMostDetailed, EllipsoidGeodesic,
@@ -37,6 +38,7 @@ export function createPlanner({ viewer, body, ellipsoid, root, hasTerrain }) {
   let mode = null;          // null | 'place' | 'route' | 'measure' | 'probe'
   let draft = [];            // Punkte für Route/Messung [{lat, lon}]
   let routeStation = null;   // Station, zu der die Route gehört
+  let wxNotice = null;       // Weltraumwetter-Hinweis (nur Mond/Mars)
   const drawn = [];          // Entities der Stationen/Routen
   const temp = [];           // Entities des aktuellen Werkzeugs
 
@@ -53,6 +55,10 @@ export function createPlanner({ viewer, body, ellipsoid, root, hasTerrain }) {
     panel.replaceChildren();
     panel.append(el('header', {}, el('strong', { text: `Stationsplanung · ${body.name}` }),
       el('button', { class: 'pl-x', type: 'button', 'aria-label': 'Schließen', onclick: () => { panel.hidden = true; setMode(null); } }, '×')));
+    if (wxNotice) {
+      panel.append(el('div', { class: `pl-wx ${wxNotice.level}`, role: 'alert' }, el('b', { text: '☢ Weltraumwetter' }), el('span', { text: wxNotice.text }),
+        el('a', { href: '#/ops/weather', class: 'pl-link', text: 'Details' })));
+    }
 
     // Anmeldung der Organisation
     if (agency) {
@@ -294,12 +300,22 @@ export function createPlanner({ viewer, body, ellipsoid, root, hasTerrain }) {
   // gespeicherten Schlüssel still prüfen
   if (key) checkKey(key).then((a) => { if (a) agency = a; else { key = null; sessionStorage.removeItem(KEY_STORE); } if (!panel.hidden) render(); }).catch(() => {});
   load();
+  // Weltraumwetter: Mond und Mars haben kein schützendes Magnetfeld – Strahlungsstürme betreffen Stationen direkt
+  const checkWx = async () => {
+    const n = surfaceRadiationNotice(await getScales());
+    if (JSON.stringify(n) === JSON.stringify(wxNotice)) return;
+    wxNotice = n;
+    btn.classList.toggle('wx', !!n); btn.classList.toggle('wx-bad', n?.level === 'bad');
+    btn.title = n ? `Stationsplanung – ${n.text}` : 'Stationsplanung';
+    if (!panel.hidden && !panel.contains(document.activeElement)) render();
+  };
+  const stopWx = body.id === 'moon' || body.id === 'mars' ? (checkWx().catch(() => {}), every(300000, checkWx)) : () => {};
   // Live: Stationen/Routen anderer Organisationen erscheinen ohne Neuladen (nicht während Eingabe/Zeichnen)
   const stopLive = every(60000, load, { skip: () => !!mode || panel.contains(document.activeElement) });
 
   return {
     click,
     active: () => !!mode,
-    dispose() { stopLive(); for (const e of [...drawn, ...temp]) entities.remove(e); btn.remove(); panel.remove(); viewer.container.style.cursor = ''; },
+    dispose() { stopLive(); stopWx(); for (const e of [...drawn, ...temp]) entities.remove(e); btn.remove(); panel.remove(); viewer.container.style.cursor = ''; },
   };
 }

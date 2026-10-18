@@ -197,3 +197,12 @@
 .sat-toggle { top: 108px; } .sat-toggle.solo { top: 60px; }
 .sat-live { font-variant-numeric: tabular-nums; color: var(--text-2, #c3cde6); }
 @media (max-width: 720px) { .sat-toggle { top: auto; bottom: 166px; } .sat-toggle.solo { bottom: 118px; } }
+
+/* Weltraumwetter-Hinweis in der Stationsplanung (Mond/Mars) */
+.pl-wx { display: grid; gap: 3px; margin: 0 0 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45; border-radius: 8px;
+  background: rgba(255, 204, 85, 0.1); border: 1px solid rgba(255, 204, 85, 0.45); color: var(--text, #e8eefc); }
+.pl-wx.bad { background: rgba(255, 107, 122, 0.12); border-color: rgba(255, 107, 122, 0.55); }
+.pl-wx b { color: #ffcc55; } .pl-wx.bad b { color: #ff6b7a; } .pl-wx .pl-link { justify-self: start; }
+.pl-toggle.wx { border-color: #ffcc55; box-shadow: 0 0 0 1px rgba(255, 204, 85, 0.35), 0 0 16px rgba(255, 204, 85, 0.25); }
+.pl-toggle.wx::after { content: '☢'; margin-left: 4px; color: #ffcc55; }
+.pl-toggle.wx-bad { border-color: #ff6b7a; } .pl-toggle.wx-bad::after { color: #ff6b7a; }

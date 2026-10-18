@@ -5,6 +5,14 @@
 // Ausgabe nur über textContent (keine innerHTML-Einfügung von Daten).
 import './isru.css';
 import { listStations } from '../../lib/stationsApi.js';
+import { getScales, surfaceRadiationNotice } from '../../lib/spaceWeather.js';
+import { every } from '../../lib/live.js';
+
+// Strahlung an der Oberfläche (Dosisäquivalent, galaktische kosmische Strahlung, ruhige Sonne):
+// Mond 1,369 mSv/Tag (Chang'e-4 LND, Zhang et al. 2020), Mars 0,64 mSv/Tag (Curiosity RAD, Hassler et al. 2014)
+const DOSE_MSV_DAY = { moon: 1.369, mars: 0.64 };
+const SHIELD = { none: { f: 1, label: 'Ohne (Außeneinsatz)' }, hab: { f: 0.7, label: 'Habitat-Wand (≈ 20 g/cm²)' }, regolith: { f: 0.25, label: 'Regolith-Bedeckung (≥ 1 m)' } };
+const CAREER_LIMIT_MSV = 600; // NASA-STD-3001 Vol. 1 Rev. B (2022), Karrieregrenze
 
 // --- Verbrauch je Person und Tag (NASA BVAD, NASA/TP-2015-218570/REV2, gerundet) -------------------------
 const PER_CREW = { o2: 0.82, co2: 1.04, water: 2.5, hygiene: 1.5, food: 1.8 }; // kg/Tag; Hygiene = Annahme (minimal, ISS-ähnlich)
@@ -41,6 +49,10 @@ const SOURCES = [
   ['NIST Chemistry WebBook – Wasser (Bildungsenthalpie/-energie)', 'https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185'],
   ['Kopp & Lean (2011): A new, lower value of total solar irradiance, GRL 38', 'https://doi.org/10.1029/2010GL045777'],
   ['NASA – Mars Fact Sheet', 'https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html'],
+  ["Zhang et al. (2020): First measurements of the radiation dose on the lunar surface (Chang'e-4 LND), Science Advances 6", 'https://doi.org/10.1126/sciadv.aaz1334'],
+  ['Hassler et al. (2014): Mars surface radiation environment measured with Curiosity RAD, Science 343', 'https://doi.org/10.1126/science.1244797'],
+  ['NASA-STD-3001 Vol. 1 Rev. B (2022): Strahlen-Karrieregrenze 600 mSv', 'https://www.nasa.gov/reference/nasa-std-3001-vol-1/'],
+  ['NOAA SWPC – NOAA-Skalen (live)', 'https://www.swpc.noaa.gov/noaa-scales-explanation'],
 ];
 
 const C = { solar: '#ffcc55', fission: '#6ea8ff', rtg: '#ff8f6b', load: '#e8eefc', soc: '#3ddc84', isru: '#b98cff', deficit: '#ff6b7a' };
@@ -233,10 +245,14 @@ export function createIsruPanel(container) {
     tau: slider('Optische Dicke τ (Mars-Staub)', { min: 0.2, max: 5, step: 0.1, value: 0.5, fmtV: (v) => fmt(v, 1) }),
     fission: slider('Kernspaltung (je 40 kWe)', { min: 0, max: 6, value: 0, unit: 'Einh.' }),
     rtg: slider('RTG (MMRTG, je 110 We)', { min: 0, max: 40, value: 0, unit: 'Stk.' }),
+    days: slider('Missionsdauer', { min: 7, max: 1000, step: 1, value: 180, unit: 'Tage' }),
     battery: slider('Batteriespeicher', { min: 0, max: 20000, step: 50, value: 1500, unit: 'kWh' }),
   };
   const site = el('select', { 'aria-label': 'Standort' }, Object.entries(SITES).map(([id, s]) => el('option', { value: id, text: s.name })));
   const flex = el('input', { type: 'checkbox', checked: true });
+  const shield = el('select', { 'aria-label': 'Abschirmung' }, Object.entries(SHIELD).map(([id, x]) => el('option', { value: id, text: x.label, selected: id === 'hab' })));
+  const radBox = el('div', { class: 'isru-rad' });
+  let wx = null;
   const stationSel = el('select', { 'aria-label': 'Station übernehmen' }, el('option', { value: '', text: 'Aus Stationsplanung übernehmen …' }));
   const siteNote = el('p', { class: 'isru-note' });
 
@@ -264,6 +280,7 @@ export function createIsruPanel(container) {
             .map(([k, l]) => el('span', {}, el('i', { style: `background:${C[k]}` }), l)))),
         card('Energiemix (eingeschwungener Zyklus)', mixBar),
         card('Stoffbilanz pro Tag', balances),
+        card('Strahlung der Crew', f.days.node, el('label', { class: 'isru-field' }, el('span', { text: 'Abschirmung im Alltag' }), shield), radBox),
         card('Einschätzung', advice))),
     el('details', { class: 'isru-src' }, el('summary', { text: 'Quellen & Modellannahmen' }),
       el('p', { text: `Verbrauch je Person und Tag: O₂ ${fmt(PER_CREW.o2, 2)} kg, CO₂ ${fmt(PER_CREW.co2, 2)} kg, Trink-/Zubereitungswasser ${fmt(PER_CREW.water, 1)} kg, Hygienewasser ${fmt(PER_CREW.hygiene, 1)} kg (Annahme), Nahrung inkl. Verpackung ${fmt(PER_CREW.food, 1)} kg. Grundlast ${BASE_KW} kW + ${CREW_KW} kW je Person (Annahme). Elektrolyse ${fmt(E_ELEC, 1)} kWh/kg O₂ (aus ΔG, 70 % Wirkungsgrad), Eis → Wasser ${E_ICE} kWh/kg (Annahme), CO₂-Elektrolyse ${E_MOXIE} kWh/kg O₂ (skalierte Anlage, Annahme), Batteriesystem ${LIION_WH_KG} Wh/kg. Solar ohne Nachführung (außer Mond-Kraterrand), Mars zur Tagundnachtgleiche.` }),
@@ -316,6 +333,19 @@ export function createIsruPanel(container) {
     if (r.isruFrac < 0.95 && r.isruWanted > 0) tips.push(`ISRU läuft nur zu ${fmt(r.isruFrac * 100)} % – mehr Überschussleistung oder ISRU als feste Last einplanen.`);
     if (r.water.resupply > 0.5 && s.ice) tips.push(`Mit ≈ ${fmt(Math.ceil(r.water.need))} kg/Tag Eis-Abbau wäre die Station wasserautark.`);
     if (p.waterRec < 0.9) tips.push('Die ISS erreicht seit 2023 rund 98 % Wasserrückgewinnung – höhere Recyclingrate spart viel Nachschub.');
+    // Strahlung
+    const rate = DOSE_MSV_DAY[s.body] * SHIELD[shield.value].f;
+    const total = rate * f.days.get();
+    const share = total / CAREER_LIMIT_MSV;
+    const notice = surfaceRadiationNotice(wx);
+    radBox.replaceChildren(
+      el('div', { class: 'isru-kpis' },
+        kpi('Dosis pro Tag', `${fmt(rate, 2)} mSv`),
+        kpi('Mission gesamt', `${fmt(total)} mSv`, share < 0.5 ? 'ok' : share < 1 ? 'warn' : 'bad'),
+        kpi('Anteil Karrieregrenze', `${fmt(share * 100)} %`, share < 0.5 ? 'ok' : share < 1 ? 'warn' : 'bad'),
+        kpi('Weltraumwetter jetzt', wx ? `S${wx.S} · G${wx.G} · R${wx.R}` : 'lädt …', notice ? notice.level : 'ok')),
+      el('p', { class: 'isru-note', text: notice ? `☢ ${notice.text}` : `Ruhige Sonne – nur galaktische kosmische Strahlung. Zum Vergleich: Erde ≈ 0,0066 mSv/Tag (2,4 mSv/Jahr natürliche Belastung).${wx ? ` Stand NOAA: ${wx.time}.` : ''}` }));
+    if (share >= 1) tips.push(`Die Missionsdosis überschreitet die NASA-Karrieregrenze (${CAREER_LIMIT_MSV} mSv) – mehr Abschirmung (Regolith) oder kürzere Aufenthalte.`);
     advice.replaceChildren(...tips.map((t) => el('li', { text: t })));
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => drawChart(canvas, r));
@@ -344,8 +374,13 @@ export function createIsruPanel(container) {
     stationSel.parentElement.hidden = !stations.length;
   }
 
+  const refreshWx = async () => { try { wx = await getScales(); update(); } catch { /* ohne Live-Wetter */ } };
+  let stopWx = null;
   update();
   return {
-    setActive(on) { if (on) { loadStations(); if (last) requestAnimationFrame(() => drawChart(canvas, last)); } },
+    setActive(on) {
+      if (!on) { stopWx?.(); stopWx = null; }
+      if (on && !stopWx) { refreshWx(); stopWx = every(300000, refreshWx); }
+      if (on) { loadStations(); if (last) requestAnimationFrame(() => drawChart(canvas, last)); } },
   };
 }
