@@ -2,6 +2,8 @@
 // Hinweis: Das ist bewusst NUR eine leichte Sperre – der Abgleich läuft im Browser, das Passwort
 // (als SHA-256-Hash hinterlegt) ist im ausgelieferten Code enthalten und daher nicht wirklich geheim.
 // Sie hält Gelegenheitszugriffe ab, ersetzt aber keinen serverseitigen Schutz.
+import { lang, setLang } from './i18n/i18n.js';
+
 const PASSWORD_SHA256 = 'f34256f79341a67d6dc5547f3883394e3390761a912daf18ddf24ffc94e47d21';
 const STORE = 'galactic_unlocked';
 
@@ -76,6 +78,17 @@ function showGate() {
       <p class="err" id="gate-err" role="alert"></p>
     </form>`;
   document.body.appendChild(wrap);
+
+  // Sprachwahl schon vor dem Entsperren (internationale Besucher)
+  const lb = document.createElement('button');
+  lb.type = 'button';
+  lb.setAttribute('translate', 'no');
+  lb.className = 'notranslate';
+  lb.textContent = lang === 'en' ? 'Deutsch' : 'English';
+  lb.style.cssText = 'position:fixed;top:16px;right:16px;left:auto;width:auto;margin:0;padding:7px 14px;font:600 12px Inter,system-ui,sans-serif;color:#c3cde6;'
+    + 'background:rgba(11,17,33,.8);border:1px solid rgba(130,170,255,.3);border-radius:999px;cursor:pointer;z-index:2';
+  lb.onclick = () => setLang(lang === 'en' ? 'de' : 'en');
+  wrap.appendChild(lb);
 
   const form = wrap.querySelector('form');
   const input = wrap.querySelector('#gate-pw');

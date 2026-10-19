@@ -779,3 +779,11 @@ button, .nav a, .sys-btn, .seg button, .chips button, .member-list button, .sp-l
 .seg button, .chips button, .sys-btn, .actions a, .actions button, .vc-toggle { transition: transform 0.15s var(--ease), background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s; }
 .seg button:active, .chips button:active, .sys-btn:active, .actions a:active, .actions button:active, .vc-toggle:active, .nav a:active { transform: scale(0.96); }
 .actions button:hover, .actions a:hover { box-shadow: 0 6px 18px rgba(110, 168, 255, 0.25); }
+
+/* Sprachumschalter DE | EN (src/i18n/i18n.js) */
+.lang-toggle { flex: none; display: inline-flex; align-items: center; gap: 2px; margin-left: auto; padding: 3px; height: 32px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); cursor: pointer; font: 600 11px/1 Inter, system-ui, sans-serif; letter-spacing: .06em; }
+.lang-toggle span { padding: 6px 8px; border-radius: 999px; color: var(--muted); transition: background .2s, color .2s; }
+.lang-toggle span.on { color: #04060d; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.lang-toggle:hover span:not(.on) { color: var(--text); }
+.lang-toggle + * { margin-left: 8px; }

@@ -4,6 +4,7 @@
 import { ensureAccess } from './gate.js';
 import { getSettings, logVisit, logViewTime } from './lib/stationsApi.js';
 import { every } from './lib/live.js';
+import { startI18n } from './i18n/i18n.js';
 
 const PREVIEW = 'galactic_admin_preview'; // vom Admin-Panel gesetzt: Seite trotz Wartung ansehen
 
@@ -90,6 +91,7 @@ function announcement(text) {
 }
 
 async function start() {
+  try { await startI18n(); } catch (e) { console.error('Übersetzung nicht verfügbar', e); }
   if (!ensureAccess()) return;
   let preview = false;
   try { preview = localStorage.getItem(PREVIEW) === '1'; } catch { /* egal */ }
