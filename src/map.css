@@ -196,7 +196,7 @@
 /* Live-Satelliten (Erde) – unter dem Orte-Knopf */
 .sat-toggle { top: 108px; } .sat-toggle.solo { top: 60px; }
 .sat-live { font-variant-numeric: tabular-nums; color: var(--text-2, #c3cde6); }
-@media (max-width: 720px) { .sat-toggle { top: auto; bottom: 166px; } .sat-toggle.solo { bottom: 118px; } }
+@media (max-width: 720px) { .sat-toggle { top: auto; bottom: 166px; } .sat-toggle.solo { top: auto; bottom: 118px; } }
 
 /* Weltraumwetter-Hinweis in der Stationsplanung (Mond/Mars) */
 .pl-wx { display: grid; gap: 3px; margin: 0 0 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45; border-radius: 8px;
@@ -208,3 +208,11 @@
 .pl-toggle.wx-bad { border-color: #ff6b7a; } .pl-toggle.wx-bad::after { color: #ff6b7a; }
 
 .pl-export { display: flex; gap: 10px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line, rgba(130, 170, 255, 0.18)); font-size: 12px; color: var(--muted, #8a97b5); }
+/* Mobil: „Planung“ liegt sonst unter der Ebenen-Leiste – unten rechts in den Knopfstapel (Orte 118, Live 166/118) */
+@media (max-width: 720px) {
+  .sites-toggle { top: auto; bottom: 118px; }
+  .sat-toggle { bottom: 166px; } .sat-toggle.solo { bottom: 118px; }
+  .pl-toggle { top: auto; bottom: 166px; }
+  .map-ui:has(.sites-toggle:not(.sat-toggle)):has(.sat-toggle) .pl-toggle { bottom: 214px; }
+  .map-ui:not(:has(.sites-toggle)) .pl-toggle { bottom: 118px; }
+}
