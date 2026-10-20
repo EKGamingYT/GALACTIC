@@ -213,6 +213,68 @@
   .sites-toggle { top: auto; bottom: 118px; }
   .sat-toggle { bottom: 166px; } .sat-toggle.solo { bottom: 118px; }
   .pl-toggle { top: auto; bottom: 166px; }
-  .map-ui:has(.sites-toggle:not(.sat-toggle)):has(.sat-toggle) .pl-toggle { bottom: 214px; }
+  .map-ui:has(.sites-toggle:not(.sat-toggle):not(.el-toggle)):has(.sat-toggle) .pl-toggle { bottom: 214px; }
   .map-ui:not(:has(.sites-toggle)) .pl-toggle { bottom: 118px; }
 }
+
+/* --- Erde live (Erdbeben, Feuer, Starts, Flugzeuge, Wetter, Überflüge) -------------------------------- */
+.el-toggle { top: 156px; }
+.map-ui:not(:has(.sites-toggle:not(.sat-toggle):not(.el-toggle))) .el-toggle { top: 108px; }
+@media (min-width: 721px) { .map-ui:not(:has(.sites-toggle:not(.sat-toggle):not(.el-toggle))) .el-panel { top: 156px; max-height: calc(100% - 156px - 24px); } }
+.el-panel {
+  position: absolute; top: 204px; right: 62px; z-index: 9; width: min(340px, calc(100% - 80px)); max-height: calc(100% - 204px - 24px); min-height: 220px;
+  overflow: auto; overscroll-behavior: contain; pointer-events: auto; padding: 12px 14px 14px; color: var(--text, #e8eefc); font-size: 12.5px;
+  background: var(--surface, rgba(11, 17, 33, 0.92)); border: 1px solid var(--line, rgba(130, 170, 255, 0.22)); border-radius: 14px;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5); scrollbar-width: thin;
+}
+.el-panel[hidden] { display: none; }
+.el-panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 14px; }
+.el-panel header .site-x { position: static; }
+.el-intro { margin: 0 0 8px; color: var(--muted, #8a97b5); line-height: 1.45; }
+.el-row { padding: 9px 0; border-top: 1px solid var(--line, rgba(130, 170, 255, 0.14)); }
+.el-sw { display: flex; align-items: center; gap: 9px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.el-sw input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.el-knob { flex: none; position: relative; width: 32px; height: 18px; border-radius: 999px; background: rgba(130, 170, 255, 0.18); border: 1px solid rgba(130, 170, 255, 0.35); transition: background 0.2s; }
+.el-knob::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #c3cde6; transition: transform 0.2s, background 0.2s; }
+.el-sw input:checked + .el-knob { background: linear-gradient(90deg, #6ea8ff, #b98cff); border-color: transparent; }
+.el-sw input:checked + .el-knob::after { transform: translateX(14px); background: #fff; }
+.el-sw input:focus-visible + .el-knob { outline: 2px solid #6ea8ff; outline-offset: 2px; }
+.el-stat { display: block; margin: 3px 0 0 41px; font-size: 11.5px; color: var(--muted, #8a97b5); font-variant-numeric: tabular-nums; }
+.el-stat.ok { color: #9fd8b0; } .el-stat.warn { color: #ffcc55; } .el-stat.bad { color: #ff9a9a; }
+.el-extra, .el-src { display: none; margin-left: 41px; }
+.el-row.on .el-extra { display: block; margin-top: 7px; } .el-row.on .el-src { display: block; }
+.el-src { margin-top: 5px; font-size: 10.5px; color: var(--muted, #8a97b5); } .el-src a { color: #9fc4ff; }
+.el-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 0 0; font-size: 11px; color: var(--text-2, #c3cde6); }
+.el-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.el-legend span::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+.el-legend.plane span::before { content: '✈'; width: auto; height: auto; background: none; box-shadow: none; color: var(--c); font-size: 12px; }
+.el-ramp { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted, #8a97b5); }
+.el-ramp i { flex: 1; height: 7px; border-radius: 4px; background: linear-gradient(90deg, #3aa0ff, #2fe0c0, #f8f35a, #ff8c2e, #ff2f6d); }
+.el-note { margin: 6px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--muted, #8a97b5); }
+.el-select, .el-form input { width: 100%; padding: 6px 9px; color: var(--text, #e8eefc); font: inherit; font-size: 12px; background: rgba(5, 9, 20, 0.7);
+  border: 1px solid rgba(130, 170, 255, 0.28); border-radius: 8px; color-scheme: dark; }
+.el-form { display: flex; gap: 6px; margin-top: 7px; } .el-form input { flex: 1; min-width: 0; }
+.el-btn { padding: 6px 11px; color: #04060d; font: 600 12px Inter, system-ui, sans-serif; background: linear-gradient(90deg, #6ea8ff, #b98cff); border: 0; border-radius: 8px; cursor: pointer; white-space: nowrap; margin-top: 7px; }
+.el-form .el-btn { margin-top: 0; }
+.el-link { display: inline-block; margin-top: 6px; color: #9fc4ff; font-size: 12px; }
+.el-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.el-item { display: grid; grid-template-columns: 1fr; gap: 1px; width: 100%; padding: 6px 8px; text-align: left; color: var(--text, #e8eefc); font: inherit;
+  background: rgba(185, 140, 255, 0.07); border: 1px solid rgba(185, 140, 255, 0.22); border-radius: 8px; cursor: pointer; }
+.el-item:hover { background: rgba(185, 140, 255, 0.15); }
+.el-item b { font-size: 12px; } .el-item small { color: var(--muted, #8a97b5); font-size: 11px; }
+.el-cd { font-variant-numeric: tabular-nums; color: #d6bfff; font-size: 11.5px; font-weight: 600; }
+.el-big { font-size: 17px !important; margin: 2px 0 4px !important; }
+.el-pass-list li { display: grid; grid-template-columns: auto 1fr auto; gap: 0 8px; align-items: baseline; padding: 5px 8px; border-radius: 8px; background: rgba(130, 170, 255, 0.06); }
+.el-pass-list li small { grid-column: 2 / 4; color: var(--muted, #8a97b5); font-size: 11px; }
+.el-pass-list li.iss { background: rgba(255, 204, 85, 0.1); box-shadow: inset 3px 0 0 #ffcc55; } .el-pass-list li.iss b { color: #ffcc55; }
+.el-pass-list em { font-style: normal; font-size: 10.5px; font-weight: 600; color: #04060d; background: #3ddc84; border-radius: 999px; padding: 1px 7px; }
+.el-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.el-empty { color: var(--muted, #8a97b5); }
+.el-warn { color: #ffcc55; font-style: normal; }
+@media (max-width: 720px) {
+  .el-toggle, .map-ui:not(:has(.sites-toggle:not(.sat-toggle):not(.el-toggle))) .el-toggle { top: 112px; bottom: auto; right: 8px; }
+  .el-panel { top: auto; left: 8px; right: 8px; bottom: 64px; width: auto; max-height: 58vh; max-height: 58dvh; min-height: 0; z-index: 11; }
+  .el-pop { z-index: 12; }
+  .el-sw { min-height: 32px; }
+}
+.el-pop { max-height: min(70vh, calc(100% - 140px)); overflow: auto; overscroll-behavior: contain; }

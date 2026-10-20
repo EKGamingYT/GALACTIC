@@ -5,7 +5,7 @@ import { Cartesian2, Cartesian3, Color, LabelStyle, VerticalOrigin, NearFarScala
 import { twoline2satrec, propagate, gstime, eciToGeodetic, degreesLat, degreesLong } from 'satellite.js';
 import { every } from '../../lib/live.js';
 
-const SATS = {
+export const SATS = {
   25544: { name: 'ISS', agency: 'NASA · Roskosmos · ESA · JAXA · CSA', kind: 'station', info: 'Internationale Raumstation, ständig bemannt seit 2000.' },
   48274: { name: 'Tiangong', agency: 'CMSA (China)', kind: 'station', info: 'Chinesische Raumstation (Kernmodul Tianhe), bemannt seit 2021.' },
   20580: { name: 'Hubble', agency: 'NASA · ESA', kind: 'science', info: 'Weltraumteleskop, gestartet 1990.' },
@@ -18,7 +18,7 @@ const SATS = {
 const KIND_COLOR = { station: '#ffcc55', science: '#b98cff', earth: '#3ddc84' };
 const SOURCE = 'https://celestrak.org/NORAD/elements/';
 
-async function loadTle() {
+export async function loadTle() {
   const get = async (url) => { const r = await fetch(url, { cache: 'no-cache' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); };
   let text = '';
   try { text = await get('/api/tle'); } catch { /* Dev-Server: kein Proxy */ }

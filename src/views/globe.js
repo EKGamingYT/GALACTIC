@@ -22,6 +22,7 @@ import { createMapUI } from './map/ui.js';
 import { createPlanner } from './map/planner.js';
 import { createSitesLayer } from './map/sitesLayer.js';
 import { createSatLayer } from './map/satLayer.js';
+import { createEarthLive } from './map/earthLive.js';
 import { metersPerPixel, niceKm, toLatLon } from './map/geo.js';
 
 Ion.defaultAccessToken = ''; // keine Cesium-ion-Dienste, nur offene NASA-Kacheln
@@ -63,6 +64,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
   let layerIdx = 0;
   let nav = null;
   let planner = null;
+  let earthLive = null;
   let sitesLayer = null;
   let disposers = [];
 
@@ -149,6 +151,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       polarCaps[1].uniforms.color = Color.fromCssColorString(south);
     }
     applyGrid();
+    earthLive?.reapplyImagery();
     layerIdx = index;
     ui?.setLayer(layer);
     applyPlaces();
@@ -314,6 +317,9 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
     // Live-Satelliten (nur Erde): ISS, Tiangong, Hubble … per SGP4 aus aktuellen CelesTrak-Bahnelementen
     let satLayer = isEarth ? createSatLayer({ viewer: v, ellipsoid, root: uiRoot }) : null;
     disposers.push(() => { satLayer?.dispose(); satLayer = null; });
+    // Erde live: Erdbeben, Feuer, Starts, Flugzeuge, Wetter, Überflüge (eigene Proxys /api/*)
+    earthLive = isEarth ? createEarthLive({ viewer: v, ellipsoid, root: uiRoot }) : null;
+    disposers.push(() => { earthLive?.dispose(); earthLive = null; });
     handler.setInputAction((e) => {
       clearTimeout(clickTimer);
       const pos = { x: e.position.x, y: e.position.y };
@@ -325,6 +331,7 @@ export function createGlobeView(container, { onPick, onLayers, onStatus }) {
       clickTimer = setTimeout(() => {
         if (viewer !== v) return;
         if (satLayer?.pickAt(pos)) return;
+        if (earthLive?.pickAt(pos)) return;
         if (sitesLayer?.pickAt(pos)) return; // realer Raumfahrt-Ort hat Vorrang vor IAU-Namen
         const f = namesReady && prefs.names ? names.fromPick(scene.pick(pos)) : null;
         if (f) {

@@ -28,6 +28,7 @@ async function get(url, { ms = 9000, type = 'json' } = {}) {
   return type === 'json' ? r.json() : r.text();
 }
 
+const short = (t, n) => (t.length > n ? `${t.slice(0, t.lastIndexOf(' ', n - 1) > n * 0.7 ? t.lastIndexOf(' ', n - 1) : n - 1).trim()} …` : t);
 const r2 = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 
 // --- Erdbeben (USGS, gemeinfrei) -------------------------------------------------------------------
@@ -82,7 +83,7 @@ export function loadLaunches() {
       status: l.status?.abbrev || '', statusName: l.status?.name || '',
       provider: l.launch_service_provider?.name || '', rocket: l.rocket?.configuration?.full_name || l.rocket?.configuration?.name || '',
       mission: l.mission?.name || '', missionType: l.mission?.type || '', orbit: l.mission?.orbit?.name || '',
-      desc: (l.mission?.description || '').slice(0, 400),
+      desc: short(l.mission?.description || '', 300),
       pad: l.pad ? { name: l.pad.name, location: l.pad.location?.name || '', lat: +l.pad.latitude, lon: +l.pad.longitude, country: l.pad.country?.alpha_2_code || '' } : null,
       webcast: !!l.webcast_live,
     })).filter((l) => l.pad && Number.isFinite(l.pad.lat) && Number.isFinite(l.pad.lon));
@@ -139,6 +140,19 @@ export async function loadIss(lat, lon) {
     out.nextVisiblePass = p.find((x) => x.visible) || null;
   }
   return out;
+}
+
+// --- Niederschlag (NASA GIBS, IMERG 30 min): jüngster verfügbarer Zeitpunkt -------------------------------
+// Kachel-URLs bekommen eine feste Zeit (statt „default“), sonst hielte der Kachel-Service-Worker alte Bilder fest.
+export function loadRainTime() {
+  return cached('gibs:imerg', 20 * 60000, async () => {
+    const from = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+    const xml = await get(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi?SERVICE=WMTS&REQUEST=DescribeDomains&LAYER=IMERG_Precipitation_Rate_30min&TILEMATRIXSET=GoogleMapsCompatible_Level6&TIME=${from}/2099-01-01`, { type: 'text' });
+    const dom = /<Domain>([^<]+)<\/Domain>/.exec(xml)?.[1];
+    const last = dom?.split(',').pop()?.split('/')[1] ?? dom?.split(',').pop();
+    if (!last || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(last)) throw new Error('GIBS-Zeit unbekannt');
+    return { layer: 'IMERG_Precipitation_Rate_30min', time: last };
+  });
 }
 
 // --- Antwort-Helfer --------------------------------------------------------------------------------------

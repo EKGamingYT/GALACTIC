@@ -78,3 +78,13 @@ Alle verwendeten Daten, Dienste und Bibliotheken (Pflicht laut NASA-Space-Apps-B
 - **CelesTrak** (T. S. Kelso, celestrak.org) – aktuelle Bahnelemente (GP/TLE) für Raumstationen und ausgewählte Satelliten, über eigenen Proxy mit 2-h-Cache
 - **satellite.js** (MIT-Lizenz) – SGP4/SDP4-Bahnausbreitung
 - **Missions-Zeitleiste:** NASA NSSDCA Master Catalog (nssdc.gsfc.nasa.gov/nmc), Agentur-Seiten und englischsprachige Wikipedia (CC BY-SA 4.0, nur Fakten/Daten übernommen); Quelle je Ereignis verlinkt
+
+## Erde live (Erdkarte)
+Idee und Aufbau angelehnt an **gods-eye-view** von Bilawal Sidhu (github.com/bilawalsidhu/gods-eye-view, MIT-Lizenz) – bewusst abgespeckt: ohne Google-3D-Tiles, Kameras, KI-Modelle, Personensuche oder Personenverfolgung. Alle Daten über eigene Proxys mit Cache (api/*).
+- **USGS Earthquake Hazards Program** – GeoJSON-Feeds (earthquake.usgs.gov) – Erdbeben 24 h / 7 Tage – gemeinfrei (US-Regierungswerk).
+- **NASA FIRMS** – MODIS Collection 6.1 NRT, offene 24-h-CSV ohne Schlüssel (firms.modaps.eosdis.nasa.gov) – Hitzepunkte/Feuer. „We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Earth Science Data and Information System (ESDIS).“
+- **The Space Devs – Launch Library 2** (ll.thespacedevs.com, Free-Tier) – nächste Raketenstarts, Startplätze; frei nutzbar mit Namensnennung, Abrufgrenze 15/h (1 h CDN-Cache).
+- **adsb.lol** – offene ADS-B-Daten (api.adsb.lol), Lizenz **ODbL 1.0** – Flugzeuge im Kartenausschnitt; Halter mit PIA/LADD-Kennzeichen ohne Kennung.
+- **NASA GIBS** – NOAA-20 VIIRS Corrected Reflectance (Echtfarben, Tagesmosaik) und GPM IMERG Precipitation Rate (30 min) – Wolken/Niederschlag; NASA-Open-Data, frei nutzbar mit Namensnennung.
+- **CelesTrak** – Bahnelemente für „Überflüge“ (SGP4-Berechnung im Browser mit satellite.js) und ISS-Überflug in api/weltlage.
+- **OpenStreetMap Nominatim** – Ortssuche für „Überflüge“ (nur wenn ein Ortsname eingetippt wird), © OpenStreetMap-Mitwirkende, ODbL.
