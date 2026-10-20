@@ -787,10 +787,17 @@ button, .nav a, .sys-btn, .seg button, .chips button, .member-list button, .sp-l
 .lang-toggle span.on { color: #04060d; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .lang-toggle:hover span:not(.on) { color: var(--text); }
 .lang-toggle + * { margin-left: 8px; }
+.logout-btn { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--muted);
+  border: 1px solid var(--line); background: var(--surface); transition: color .2s, border-color .2s; }
+.logout-btn:hover { color: #ff9a9a; border-color: rgba(255, 154, 154, .5); }
+.logout-btn svg { width: 16px; height: 16px; }
+.logout-btn + * { margin-left: 8px; }
 /* Mobil: Sprachumschalter kompakt – nur die aktive Sprache als runder Knopf (Tippen wechselt) */
 @media (max-width: 720px) {
   .lang-toggle { height: 30px; padding: 2px; margin-left: 4px; }
   .lang-toggle span:not(.on) { display: none; }
   .lang-toggle span { padding: 6px 7px; }
   .lang-toggle + * { margin-left: 4px; }
+  .logout-btn { width: 30px; height: 30px; }
+  .logout-btn + * { margin-left: 4px; }
 }

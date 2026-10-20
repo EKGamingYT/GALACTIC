@@ -1,7 +1,6 @@
-// Einstieg der App: Zugangssperre → Wartungsmodus prüfen → App laden; dazu Hinweisbanner und Besucherzählung.
+// Einstieg der App (Zugangsschutz läuft serverseitig in middleware.js): Wartungsmodus prüfen → App laden; dazu Hinweisbanner und Besucherzählung.
 // Einstellungen kommen aus Supabase (site_settings, öffentlich lesbar). Antwortet der Server nicht schnell genug,
 // startet die App trotzdem (Wartung darf die Seite nicht durch Netzprobleme blockieren).
-import { ensureAccess } from './gate.js';
 import { getSettings, logVisit, logViewTime } from './lib/stationsApi.js';
 import { every } from './lib/live.js';
 import { startI18n } from './i18n/i18n.js';
@@ -92,7 +91,6 @@ function announcement(text) {
 
 async function start() {
   try { await startI18n(); } catch (e) { console.error('Übersetzung nicht verfügbar', e); }
-  if (!ensureAccess()) return;
   let preview = false;
   try { preview = localStorage.getItem(PREVIEW) === '1'; } catch { /* egal */ }
   let settings = {};

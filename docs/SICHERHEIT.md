@@ -5,14 +5,22 @@ Admin-Panel, Frontend-XSS, Service Worker. Methode: eigener Code-Review + 15 Liv
 echte API. Ein separater Angriffs-Agent wurde vom Sicherheitsfilter der Umgebung gestoppt; die Prüfung
 wurde stattdessen direkt und defensiv durchgeführt.
 
-## Zugangsschutz (`middleware.js`)
-- Läuft serverseitig vor jeder Anfrage. Passwort und Signaturschlüssel nur als Vercel-Umgebungsvariablen
-  (`SITE_PASSWORD`, `SESSION_SECRET`), nie im Code/Git. Fehlen sie → Seite gesperrt (fail closed).
-- Sitzung: HttpOnly-Cookie, `Secure`, `SameSite=Lax`, HMAC-SHA-256-signiert, 14 Tage, serverseitig geprüft.
-- Passwortvergleich zeitkonstant (über SHA-256 gleicher Länge). Fehlversuch mit ~0,9 s Verzögerung.
-- Geprüft: kein Cookie → Anmeldeseite/401; falsches Passwort → 401; gefälschtes/manipuliertes Cookie → 401;
-  CSRF (fremder Origin) beim Login → 403; offener Redirect (`//evil`, `/\evil`) → auf `/` normalisiert.
-- `/__login` nur per exaktem Pfad; abweichende Schreibweise/Encoding fällt auf den Session-Check zurück (fail closed).
+## Zugangsschutz (`middleware.js`, Stand 2026-10-20)
+- Vercel Routing Middleware (auch im Hobby-Tarif) läuft serverseitig vor **jeder** Anfrage: Seiten, `/assets/*`,
+  `/api/*`, `/admin.html`, Service-Worker-Skript. Ohne gültige Sitzung → Anmeldeseite (HTML) bzw. 401.
+  Die frühere Browser-Sperre (`src/gate.js`, ungesalzener SHA-256 im Bundle) ist entfernt.
+- Kein Passwort/Schlüssel im Code und keine Umgebungsvariable: `auth-config.js` enthält nur Salz, Iterationszahl und
+  Prüfwert V. Ableitung: K = PBKDF2-SHA-256(Passwort, Salz, 300.000), T = HMAC(K, „galactic-session-v1“), V = SHA-256(T).
+  Passwort (≈124 Bit Zufall) nur lokal in `.galactic_passwort.txt`; neu setzen mit `scripts/passwort-setzen.mjs`.
+- Sitzung: Cookie `galactic_auth=v1.<Ablauf>.<T>`, HttpOnly, Secure, SameSite=Lax; „angemeldet bleiben“ 90 Tage,
+  sonst Browser-Sitzung (serverseitig max. 24 h). Pro Anfrage nur ein SHA-256-Vergleich (zeitkonstant).
+  Bewusst kein HMAC-Schlüssel „aus dem Hash“: Das Repo ist öffentlich, ein daraus abgeleiteter Schlüssel wäre für
+  jeden nachrechenbar. T ist ohne Passwort nicht erzeugbar. Grenze: Wer ein Cookie stiehlt, kann den Ablauf selbst
+  wählen – ein neues Passwort (neues Salz) macht alle Sitzungen sofort ungültig.
+- Fehlversuche: ≥1 s Verzögerung, steigend pro IP (pro Server-Instanz, ohne Datenbank) plus PBKDF2-Rechenzeit.
+- CSRF-Schutz beim Login (Origin/Sec-Fetch-Site), kein offener Redirect (`next` nur relative Pfade), `/__login`/
+  `/__logout` nur per exaktem Pfad; fehlt/ist `auth-config.js` ungültig → 503 (fail closed).
+- Anmeldeseite mit eigener strenger CSP (`default-src 'none'`, kein Skript), `no-store`, `noindex`.
 
 ## Sicherheits-Header (nach Anmeldung, alle Seiten)
 CSP (Inline-Skript per SHA-256-Hash freigegeben, `object-src 'none'`, `frame-ancestors 'none'`,
@@ -38,7 +46,7 @@ gegen Erde-, Mars- und Sonnensystem-Ansicht ohne CSP-Verstoß verifiziert.
   funktioniert das Schlüssel-/Admin-Modell. Jede Funktion prüft intern die Berechtigung.
 
 ## Admin-Panel (`admin.html`, `src/admin/`)
-- Eigene Seite, `noindex,nofollow`, zusätzlich durch die Passwort-Middleware geschützt.
+- Eigene Seite, `noindex,nofollow`, liegt zusätzlich hinter dem serverseitigen Login (`middleware.js`).
 - Admin-Token nur in `sessionStorage` (endet mit dem Tab), nie in localStorage/URL/Cookie.
 - Gesamtes DOM über `textContent`/Properties, kein `innerHTML` mit Fremddaten → kein XSS über Organisations-/Schlüsselnamen.
 

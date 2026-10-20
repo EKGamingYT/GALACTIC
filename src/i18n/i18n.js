@@ -141,6 +141,13 @@ function addToggle() {
   b.setAttribute('aria-label', b.title);
   b.innerHTML = `<span class="${lang === 'de' ? 'on' : ''}">DE</span><span class="${lang === 'en' ? 'on' : ''}">EN</span>`;
   b.onclick = () => setLang(lang === 'en' ? 'de' : 'en');
+  // Abmelden (beendet die serverseitige Sitzung, siehe middleware.js)
+  const out = document.createElement('a');
+  out.href = '/__logout';
+  out.className = 'logout-btn';
+  out.title = lang === 'en' ? 'Sign out' : 'Abmelden';
+  out.setAttribute('aria-label', out.title);
+  out.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M7.05 6.05a7 7 0 1 0 9.9 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   const search = host.querySelector('.search');
-  if (search) search.before(b); else host.append(b);
+  if (search) search.before(b, out); else host.append(b, out);
 }
