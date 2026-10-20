@@ -7,7 +7,7 @@ Bewusst **ohne** Google-3D-Tiles, Kameras, KI-/Sprachmodelle, Personensuche, Ges
 ## Stand
 - [x] Schritt 1: Server-Proxys + Dev-API im Vite-Server + Permissions-Policy `geolocation=(self)`
 - [x] Schritt 2: Oberfläche (src/views/map/earthLive.js, Stil in src/map.css), i18n EN, CREDITS
-- [ ] Schritt 3: Deploy prüfen (siehe unten „Offen“)
+- [x] Schritt 3: Deploy 503bfb2 auf Vercel „success“; alle neuen /api/* ohne Anmeldung → 401, Permissions-Policy live
 
 ## Ebenen
 | Ebene | Quelle (Proxy) | Cache | Hinweise |
@@ -44,4 +44,6 @@ Vorschlag für später (analog Sirius-App, ohne Passwort im Sirius-Code):
 - adsb.lol-Grenze ca. 500 Abrufe/Tag je IP: durch Raster + CDN + Pause bei Inaktivität entschärft; bei vielen Nutzern ggf. Raster gröber/Cache länger.
 
 ## Offen
-- Deploy prüfen (Browser, angemeldet) – siehe Bericht.
+- Funktionsprüfung **angemeldet auf Produktion** steht aus (lokal mit Vite vollständig getestet; Login auf der
+  Produktivseite bewusst nicht automatisiert). Bitte einmal „🌍 Erde live“ öffnen und je Ebene einschalten.
+- Sirius-Zugang zu /api/weltlage (Token-Header, siehe oben) – erst auf Wunsch umsetzen.
