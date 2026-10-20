@@ -173,7 +173,7 @@ export default async function middleware(request) {
     const remember = form.get('remember') === '1';
     const exp = Math.floor(Date.now() / 1000) + (remember ? REMEMBER_S : SESSION_S);
     const cookie = `${COOKIE}=v1.${exp}.${b64url(t)}; Path=/; HttpOnly; Secure; SameSite=Lax${remember ? `; Max-Age=${REMEMBER_S}` : ''}`;
-    return new Response(null, { status: 303, headers: { Location: next, 'Cache-Control': 'no-store', 'Set-Cookie': cookie, 'X-Dbg': encodeURIComponent(request.url + ' | ' + url.search) } });
+    return new Response(null, { status: 303, headers: { Location: next, 'Cache-Control': 'no-store', 'Set-Cookie': cookie } });
   }
 
   if (await validSession(request)) return new Response(null, { headers: { 'x-middleware-next': '1' } }); // weiter zur Seite
