@@ -801,3 +801,8 @@ button, .nav a, .sys-btn, .seg button, .chips button, .member-list button, .sp-l
   .logout-btn { width: 30px; height: 30px; }
   .logout-btn + * { margin-left: 4px; }
 }
+/* Schmale Handys: Platz für den Abmelden-Knopf in der Kopfleiste schaffen */
+@media (max-width: 420px) {
+  .topbar { gap: 4px; }
+  .nav a { width: 34px; }
+}
