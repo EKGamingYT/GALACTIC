@@ -73,7 +73,7 @@ const PAGE_HEADERS = {
   'Cache-Control': 'no-store',
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'no-referrer',
+  'Referrer-Policy': 'same-origin',
   'X-Robots-Tag': 'noindex, nofollow',
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 };
@@ -156,7 +156,10 @@ export default async function middleware(request) {
     // CSRF-Schutz: nur Formulare dieser Seite
     const origin = request.headers.get('origin');
     const fetchSite = request.headers.get('sec-fetch-site');
-    if ((origin && origin !== url.origin) || (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none')) {
+    // (Origin „null“ kommt bei strenger Referrer-Policy vor – dann entscheidet Sec-Fetch-Site)
+    const originBad = origin && origin !== 'null' && origin !== url.origin;
+    const siteOk = fetchSite ? fetchSite === 'same-origin' || fetchSite === 'none' : origin === url.origin;
+    if (originBad || !siteOk) {
       return loginPage({ lang: pickLang(request, url), error: T[pickLang(request, url)].bad, status: 403 });
     }
     let form;
