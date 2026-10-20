@@ -121,14 +121,14 @@ button{width:100%;margin-top:14px;padding:11px;color:#04060d;font:600 14px Inter
 background:rgba(11,17,33,.8);border:1px solid rgba(130,170,255,.3);border-radius:999px}
 </style></head><body>
 <a class="lang" href="/__login?lang=${other}&amp;next=${encodeURIComponent(next)}" translate="no">${t.other}</a>
-<form method="post" action="/__login">
+<form method="post" action="/__login?next=${encodeURIComponent(next)}">
 <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="29" fill="none" stroke="rgba(130,170,255,.25)" stroke-width="1.5"/>
 <circle cx="32" cy="32" r="9" fill="#9bbcff"/><ellipse cx="32" cy="32" rx="24" ry="8.5" transform="rotate(-22 32 32)" fill="none" stroke="#8aa8ff" stroke-width="2" opacity=".6"/></svg>
 <h1>G.A.L.A.C.T.I.C.</h1><p class="sub">${esc(t.sub)}</p>
 <label for="pw">${esc(t.pw)}</label>
 <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus maxlength="200">
 <label class="remember"><input type="checkbox" name="remember" value="1" checked> <span>${esc(t.remember)}</span></label>
-<input type="hidden" name="next" value="${esc(next)}"><input type="hidden" name="lang" value="${lang}">
+<input type="hidden" name="lang" value="${lang}">
 <button type="submit">${esc(t.btn)}</button>
 <p class="msg ${error ? 'err' : 'info'}" role="alert">${esc(error || info)}</p>
 </form></body></html>`;
@@ -162,7 +162,7 @@ export default async function middleware(request) {
     let form;
     try { form = await request.formData(); } catch { return loginPage({ lang: pickLang(request, url), error: T[pickLang(request, url)].bad, status: 400 }); }
     const lang = pickLang(request, url, String(form.get('lang') || ''));
-    const next = safeNext(String(form.get('next') ?? '/'));
+    const next = safeNext(url.searchParams.get('next') || '/'); // Rücksprungziel steht in der Formular-URL
     const given = String(form.get('password') ?? '').slice(0, 200);
     const t = given ? await tokenFromPassword(given) : null;
     if (!t || !(await matchesVerifier(t))) {
